@@ -1,0 +1,11 @@
+(library
+  (name parse)
+  (libraries fmlib_std fmlib_parse)
+  (inline_tests)
+  (preprocess (pps ppx_inline_test))
+)
+
+(documentation
+  (package compiler)
+  (mld_files index other)
+)
