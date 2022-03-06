@@ -1,28 +1,20 @@
-type t =
-    | BraceLeft
-    | BraceRight
-    | BracketLeft
-    | BracketRight
-    | Colon
-    | Comma
-    | Decimal of string
-    | Dot
-    | EmptyBracket          (* [] *)
-    | EmptyParen            (* () *)
-    | Identifier of string
-    | Keyword of Keyword.t
-    | Metavariable of string
-    | Operator of string
-    | ParenLeft
-    | ParenRight
-    | Semicolon
-    | Wildcard
-
+type t = Token_type.t * string
 
 val to_string: t -> string
+val to_escaped: t -> string
 
+val paren_left: t
+val paren_right: t
+val paren_empty: t
+val bracket_left: t
+val bracket_right: t
+val bracket_empty: t
+val brace_left: t
+val brace_right: t
+
+val assign: t
+val colon: t
 val comma: t
-
-val identifier: string -> t
-
-val operator: string -> t
+val dot: t
+val lambda: t
+val semicolon: t

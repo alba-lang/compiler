@@ -1,0 +1,111 @@
+{0 Parser}
+
+{{!page-parse} Up}
+
+
+
+{1 Terms}
+
+
+
+{2 Tuples and Lists}
+
+The comma operator is right associative and can be used within brackets
+(literal lists) and parentheses (tuples).
+
+{v
+    [a, b, c, ... ]             -- list
+
+    (a, b, c)                   -- tuples
+v}
+
+
+
+
+{2 Application}
+
+The function term (head term) is usually a name, but it can be some complex
+expression within parentheses or brackets. It can never be a constant or an
+implicit argument.
+
+
+{v
+    legal
+    -----
+    f a b c ...
+
+    (\ x := y) a b c ...
+
+    (f,g,h) a b c ...               -- comma is an operator
+
+    (f + g) a b c ...               -- '+' is an operator
+
+    [x,y] a b c ...                 -- '::' is an operator
+
+
+    illegal
+    -------
+    {f} a b c ...                   -- function term never implicit
+
+    1 a b c ...                     -- constants are not functions
+    "hello" ...
+
+    Prop a b c                      -- sorts are not functions
+    Level a b c
+v}
+
+
+
+
+
+{2 Precedence}
+
+Some low level precedences (low to high)
+
+- comma
+- where let
+- assign
+- colon
+- arrow
+
+{v
+    construct                           parsed as
+
+    a + b where a := e1 , e2            (a + b where a := e1), e2
+                                        comma < where
+
+    let a := e1 := a + b, e2            (let a:= e1 := a + b), e2
+                                        comma < let
+
+    all x: T, e                         (all x: T), e
+                                        comma < colon
+
+    \ x := a, b                         (\ x := a), b
+                                        comma < assign
+
+    \ x := a : T                        \ x := (a : T)
+                                        assign < colon
+
+    A : B : C                           A : (B : C)
+                                        colon right assoc
+
+    all x: A -> B                       all x: (A -> B)
+                                        colon < arrow
+
+    \ x := A -> B                       \ x := (A -> B)
+                                        assign < arrow
+v}
+
+
+
+{1 Types}
+
+{2 Type Terms}
+
+{v
+    type Natural: Any := [zero, succ (_:Natural)]
+
+    type Natural :=
+        zero
+        succ: Natural -> Natural
+v}

@@ -1,5 +1,6 @@
 (library
-  (name parse)
+  (name alba_parse)
+  (public_name compiler.parse)
   (libraries fmlib_std fmlib_parse)
   (inline_tests)
   (preprocess (pps ppx_inline_test))
@@ -7,5 +8,5 @@
 
 (documentation
   (package compiler)
-  (mld_files index other)
+  (mld_files parse parse_docu)
 )

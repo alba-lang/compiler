@@ -31,6 +31,42 @@ struct
     module Basic = Character.Make (Unit) (Token_plus) (Void)
     include Basic
 
+    (* Convenience Combinators
+     * =======================
+     *)
+
+
+    let optional_with_default (a: 'a) (p: 'a t): 'a t =
+        p </> return a
+
+
+    let with_trailing_char (c: char) (str: string): string t =
+        (
+            let* _ = char c in
+            return (str ^ String.make 1 c)
+        )
+        </>
+        return str
+
+
+    let around (lpar: char) (rpar: char) (p: 'a t): 'a t =
+        let* _ = char lpar in
+        let* a = p in
+        let* _ = char rpar in
+        return a
+    let _ = around
+
+
+    let string_of (p: char t): string t =
+        let rec many str =
+            map (fun c -> str ^ String.make 1 c) p >>= many
+            </>
+            return str
+        in
+        many ""
+
+
+
 
     (* Whitespace
      * ========== *)
@@ -68,7 +104,7 @@ struct
         rest false
 
     let blank_or_newline: unit t =
-        let* _ = char ' ' </> char '\n' in
+        let* _ = char ' ' </> char '\n' </> char '\r' in
         return ()
 
     let whitespace: int t =
@@ -77,27 +113,30 @@ struct
         |> no_expectations
 
 
+
+
+
+
+
+
+
+
     (* Identifiers and Keywords
      * ========================
      *)
 
     let raw_identifier: string t =
-        let* str = word Char.is_letter Char.is_alpha_num_ "identifier" in
-        (
-            let* _ = char '?' in
-            return (str ^ String.make 1 '?')
-        )
-        </>
-        return str
+        word Char.is_letter Char.is_alpha_num_ "identifier"
+        >>= with_trailing_char '?'
 
 
     let identifier_or_keyword: Token.t t =
         let* str = raw_identifier in
-        match Keyword.of_string str with
+        match Token_type.keyword_of_string str with
         | None ->
-            return (Token.Identifier str)
+            return (Token_type.Identifier, str)
         | Some kw ->
-            return (Token.Keyword kw)
+            return (kw, str)
 
 
     let metavariable: Token.t t =
@@ -106,9 +145,65 @@ struct
         let  ustr = String.make 1 u in
         match str with
         | None ->
-            return (Token.Metavariable ustr)
+            return (Token_type.Metavariable, ustr)
         | Some str ->
-            return (Token.Metavariable (ustr ^ str))
+            return (Token_type.Metavariable, ustr ^ str)
+
+
+
+
+    (* Characters and Strings
+     * ======================
+     *)
+
+    let string_char: char t =
+        charp
+            (fun c -> c <> '\n' && c <> '"' && c <> '\r')
+            "any character except newline and '\"'"
+
+    let char_char: char t =
+        charp
+            (fun c -> c <> '\n' && c <> '\r')
+            "any character except newline and \"'\""
+
+
+    let escaped_char (p: char t): char t =
+        let* c = p
+        in
+        if c <> '\\' then
+            return c
+        else
+            let* c = p in
+            match c with
+            | 'n' ->
+                return '\n'
+            | 'r' ->
+                return '\r'
+            | 't' ->
+                return '\t'
+            | 'x' ->
+                let* h1 = hex_digit in
+                let* h2 = hex_digit in
+                return (Char.chr (h1 * 16 + h2))
+            | _ ->
+                return c
+
+
+
+
+    let alba_string: Token.t t =
+        let* _ = char '"' in
+        let* str = string_of (escaped_char string_char) in
+        let* _ = char '"' in
+        return (Token_type.String, str)
+
+
+    let alba_char: Token.t t =
+        let* _ = char '\'' in
+        let* c = escaped_char char_char in
+        let* _ = char '\'' in
+        return (Token_type.Char, String.make 1 c)
+
 
 
 
@@ -117,17 +212,66 @@ struct
      *)
 
     let operator: Token.t t =
-        let op_chars = "+-/|\\<>=~^:" in
+        let op_chars = "+-*/|&\\<>=~^:" in
         let is_opchar c =
             Stdlib.String.contains op_chars c
         in
         let* str =
             word is_opchar is_opchar "operator or colon"
+            >>= with_trailing_char '?'
         in
-        if str = ":" then
-            return Token.Colon
-        else
-            return (Token.Operator str)
+        match str with
+        | ":" ->
+            return Token.colon
+        | ":=" ->
+            return Token.assign
+        | {|\|} ->
+            return Token.lambda
+        | _ ->
+            return (Token_type.Operator, str)
+
+
+
+
+
+    (* Numbers
+     * =======
+     *)
+
+    let digits: string t =
+        word Char.is_digit Char.is_digit "digits"
+
+
+    let exponent: string t =
+        let* _ = char 'E' </> char 'e' <?> "'E' or 'e'" in
+        let* sign =
+            map
+                (String.make 1)
+                (char '+' </> char '-')
+            |> optional_with_default ""
+        in
+        let* ds = digits in
+        return ("e" ^ sign ^ ds)
+
+
+    let number: Token.t t =
+        let* before_dot = digits in
+        (
+            let* _         = char '.' in
+            let* after_dot = optional_with_default "" digits in
+            let* exp       = optional_with_default "" exponent in
+            return (
+                Token_type.Float,
+                before_dot ^ "." ^ after_dot ^ exp)
+        )
+        </>
+        (
+            let* exp = exponent in
+            return
+                (Token_type.Float, before_dot ^ exp)
+        )
+        </>
+        return (Token_type.Decimal, before_dot)
 
 
 
@@ -151,23 +295,23 @@ struct
             one_of_chars str ("one of \"" ^ str ^ "\"")
         in
         if c = '(' then
-            second_char_opt ')' Token.ParenLeft Token.EmptyParen
+            second_char_opt ')' Token.paren_left Token.paren_empty
         else if c = '[' then
-            second_char_opt ']' Token.BracketLeft Token.EmptyBracket
+            second_char_opt ']' Token.bracket_left Token.bracket_empty
         else if c = ')' then
-            return Token.ParenRight
+            return Token.paren_right
         else if c = ']' then
-            return Token.BracketRight
+            return Token.bracket_right
         else if c = '{' then
-            return Token.BraceLeft
+            return Token.brace_left
         else if c = '}' then
-            return Token.BraceRight
+            return Token.brace_right
         else if c = '.' then
-            return Token.Dot
+            return Token.dot
         else if c = ',' then
-            return Token.Comma
+            return Token.comma
         else if c = ';' then
-            return Token.Semicolon
+            return Token.semicolon
         else
             assert false (* cannot happen *)
 
@@ -178,20 +322,24 @@ struct
      * =====
      *)
 
+    let unknown: Token.t t =
+        let* c = charp (fun _ -> true) "any char"
+        in
+        return (Token_type.Unknown, String.make 1 c)
+
     let token: (Position.range * Token.t) t =
         let one_token =
             identifier_or_keyword
-            </>
-            metavariable
-            </>
-            symbol
-            </>
-            operator
+            </> metavariable
+            </> symbol
+            </> operator
+            </> number
+            </> alba_string
+            </> alba_char
+            </> unknown
         in
         let* _ = whitespace in
-        let* tok = located one_token in
-        let* _ = whitespace in
-        return tok
+        located one_token
 
 
 
@@ -203,9 +351,6 @@ struct
 
     module Parser = struct
         include Basic.Parser
-
-        let put (c: char) (p: t): t =
-            put c p
 
         let make (pos: Position.t): t =
             make_parser pos () token
@@ -220,7 +365,6 @@ struct
                 put
                 put_end
                 lex
-
     end
 end
 
@@ -249,7 +393,7 @@ module Test_parser = struct
         let token: Token.t t =
             step
                 "token"
-                (fun _ _ tok -> Some (tok, ()))
+                (fun state _ tok -> Some (tok, state))
 
         let parse =
             zero_or_more token
@@ -276,6 +420,21 @@ module Test_parser = struct
 end
 
 
+module Pretty = Fmlib_pretty.Print
+
+let write_error (str: string) (p: Test_parser.t): unit =
+    let module Reporter = Error_reporter.Make (Test_parser) in
+    if Test_parser.has_failed_syntax p then
+        Reporter.(
+            make_syntax p
+            |> run_on_string str
+            |> Pretty.layout 50
+            |> Pretty.write_to_channel stdout
+        )
+
+let _ = write_error
+
+
 let%test _ =
     let str = {|
         {- Initial comment -}
@@ -283,15 +442,37 @@ let%test _ =
                 -- List of 'A's
             []: List            {- empty list-}
             (::): A -> List -> List
+
+
+        10 9.5 1.6e-6 1e4 1.e4
+
+        'a' '\x7f'
+        "blabla" "xx\x0a\n\t\r\\"
+        _
+        _meta
+        even?
         |}
     in
     let open Test_parser in
     let p = run_on_string str start in
+    write_error str p;
+    (*if has_succeeded p then
+        Stdlib.List.iter
+            (fun t -> Printf.printf "%s\n" (Token.to_escaped t))
+            (final p);*)
     has_succeeded p
     &&
     List.map Token.to_string (final p)
     =
     ["class"; "List"; "("; "A"; ":"; "Any"; ")"; ":"; "Any"; ":=";
      "[]"; ":"; "List";
-     "("; "::"; ")"; ":"; "A"; "->"; "List"; "->"; "List"
+     "("; "::"; ")"; ":"; "A"; "->"; "List"; "->"; "List";
+
+     "10"; "9.5"; "1.6e-6"; "1e4"; "1.e4";
+
+     "a"; "\x7f";
+
+     "blabla"; "xx\x0a\n\t\r\\";
+
+     "_"; "_meta"; "even?"
     ]
