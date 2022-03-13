@@ -1,11 +1,15 @@
 module type ANY    = Fmlib_std.Interfaces.ANY
 module type SOURCE = Fmlib_std.Interfaces.SOURCE
+module type SINK   = Fmlib_std.Interfaces.SINK
 
 module Void = Fmlib_std.Void
 
 module Make (E: ANY) =
 struct
     module B = Basic_io
+
+    type in_channel  = B.in_channel
+    type out_channel = B.out_channel
 
     type 'a t = ('a, E.t) B.t
 
@@ -77,10 +81,35 @@ struct
         File_path.resolve sep lst |> return
 
 
+    let open_in (f: string -> E.t) (path: string): in_channel t =
+        apply_basic f (B.open_in path)
+
+
+    let seek_in (f: string -> E.t) (ch: in_channel) (pos: int): unit t =
+        apply_basic f (B.seek_in ch pos)
+
+
+    let close_in (f: string -> E.t) (ch: in_channel): unit t =
+        apply_basic f (B.close_in ch)
+
+
     module Write (Source: SOURCE with type item = char) =
     struct
         let err_out (src: Source.t): (unit, Void.t) B.t =
             let module Write = B.Write (Source) in
             Write.err_out src
+    end
+
+
+    module Read (Sink: SINK with type item = char) =
+    struct
+        let from
+                (f:    string -> E.t)
+                (ch:   in_channel)
+                (sink: Sink.t)
+            : Sink.t t
+            =
+            let module R = B.Read (Sink) in
+            apply_basic f (R.from ch sink)
     end
 end

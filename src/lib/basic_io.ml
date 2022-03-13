@@ -1,7 +1,10 @@
 open Fmlib_std
 
 module type SOURCE = Fmlib_std.Interfaces.SOURCE
+module type SINK   = Fmlib_std.Interfaces.SINK
 
+type in_channel  = Stdlib.in_channel
+type out_channel = Stdlib.out_channel
 
 type ('a, 'e) t = unit -> ('a, 'e) result
 
@@ -118,6 +121,29 @@ let path_delimiter: (char, Void.t) t =
         Ok ':'
 
 
+let open_in (path: string): (in_channel, string) t =
+    sys (fun () -> open_in path)
+
+
+let close_in (ch: in_channel): (unit, string) t =
+    sys (fun () -> close_in ch)
+
+
+let seek_in (ch: in_channel) (pos: int): (unit, string) t =
+    sys (fun () -> seek_in ch pos)
+
+
+let input_char (ch: in_channel): (char option, string) t =
+    fun () ->
+    try
+        Ok (Some (input_char ch))
+    with
+    | End_of_file ->
+        Ok None
+    | Sys_error str ->
+        Error str
+
+
 let err_out (c: char): (unit, Void.t) t =
     fun () ->
     try
@@ -137,4 +163,38 @@ struct
                 return ()
         in
         out src
+end
+
+
+module Read (Sink: SINK with type item = char) =
+struct
+    let from (ch: in_channel) (sink: Sink.t): (Sink.t, string) t =
+        fun () ->
+        try
+            let str = Stream.of_channel ch in
+            let rec read sink =
+                if Sink.needs_more sink then
+                    try
+                        read (Sink.put (Stream.next str) sink)
+                    with Stream.Failure ->
+                        Ok sink
+                else
+                    Ok sink
+            in
+            read sink
+        with Sys_error str ->
+            Error str
+
+        (*let rec read sink =
+            if Sink.needs_more sink then
+                let* c = input_char ch in
+                match c with
+                | None ->
+                    return (Sink.put_end sink)
+                | Some c ->
+                    read (Sink.put c sink)
+            else
+                return sink
+        in
+        read sink*)
 end

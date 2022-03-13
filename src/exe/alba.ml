@@ -16,6 +16,10 @@ struct
         f
 
 
+    let to_doc (er: t): doc =
+        er ()
+
+
     let one_para (lst: doc list): doc =
         pack " " lst <+> cut
 
@@ -91,17 +95,151 @@ struct
         cannot_do what path
             "maybe it don't have the permissions \
             to do that."
+
+
+    let expecting_one_of (lst: string list) (): doc =
+        [
+            wrap_words "I was expecting one of" <+> cut;
+
+            List.map (fun str -> text "- " <+> text str) lst
+            |> stack ""
+            |> nest 4
+            <+> cut;
+        ]
+        |> paragraphs
+        <+> cut
 end
 
 
-module Io = Io.Make (Error)
 
-let alba_error (e: Error.t): (int, Void.t) Basic_io.t =
-    let module Write = Io.Write (Pretty) in
-    e ()
-    |> Pretty.layout 80
-    |> Write.err_out
-    |> Basic_io.map (fun () -> 0)
+
+module Package =
+struct
+    type t
+end
+
+
+module Semantic =
+struct
+    type t = Fmlib_parse.Position.range * Error.t
+end
+
+module Package_parser =
+struct
+    open Fmlib_parse
+
+    module C = Character.Make (Unit) (Package) (Semantic)
+
+    include C
+
+    let is_letter (c: char): bool =
+        ('A' <= c && c <= 'Z') || ('a' <= c && c <= 'z')
+
+    let is_digit (c: char): bool =
+        '0' <= c && c <= '9'
+
+    let is_alpha_betic (c: char): bool =
+        is_letter c || is_digit c || c = '_'
+
+    let is_key_inner (c: char): bool =
+        is_letter c || is_digit c || c = '-' || c = '_'
+
+
+    let comment: char t =
+        let* _ = char '#' in
+        let* _ =
+            (charp (fun c -> c <> '\n') "comment character")
+            |> skip_zero_or_more
+        in
+        return '#'
+
+
+    let whitespace: int t =
+        char ' ' </> char '\n' </> comment
+        |> skip_zero_or_more
+        |> no_expectations
+        |> detach
+
+
+    let lexeme (p: 'a t): 'a t =
+        let* a = p in
+        let* _ = whitespace in
+        return a
+
+
+    let located_lexeme (p: 'a t): 'a Located.t t =
+        let* a = located p in
+        let* _ = whitespace in
+        return a
+
+
+    let raw_string: string t =
+        let expect  = "printable ascii chars except '#'" in
+        let inner c = ' ' <= c && c <= '~' && c <> '#' in
+        let first c = c <> '"' && inner c
+        in
+        (word first inner expect)
+        |> map Stdlib.String.trim
+
+
+    let quoted_string: string t =
+        let expect = "printable ascii chars except double quote" in
+        let ok c = ' ' <= c && c <= '~' && c <> '\n' && c <> '"'
+        in
+        let* _   = char '"' in
+        let* str = (word ok ok expect) </> return "" in
+        let* _   = char '"' in
+        return str
+
+
+    let key: string t =
+        word is_letter is_key_inner "key"
+
+
+    let key_value (f: string Located.t -> 'a t): 'a t =
+        let* k = located_lexeme key in
+        let* _ = char ':' |> lexeme in
+        f k |> indent 1
+
+
+    let get_main (): string Located.t t =
+        key_value
+            (fun (range, id) ->
+                 if id = "main" then
+                     assert false
+                 else
+                     fail (range, Error.expecting_one_of ["main"]))
+
+
+    let used_packages (): string Located.t list t =
+        assert false
+
+
+    let library (): Package.t t =
+        assert false
+
+
+    let console_application (): Package.t t =
+        let* _ = get_main () |> align in
+        let* _ = used_packages () |> align in
+        assert false
+
+    let package: Package.t t =
+        key_value
+            (fun (range, id) ->
+                 match id with
+                 | "console-application" ->
+                     console_application ()
+
+                 | "library" ->
+                     library ()
+
+                 | _ ->
+                     fail (range,
+                           Error.expecting_one_of
+                               ["console-application"; "library"])
+            )
+end
 
 
 
@@ -113,36 +251,19 @@ let alba_error (e: Error.t): (int, Void.t) Basic_io.t =
 
 module Alba_program =
 struct
+    module type SOURCE = Fmlib_std.Interfaces.SOURCE
+    module type SINK   = Fmlib_std.Interfaces.SINK
+
     module Io = Lib.Io.Make (Error)
     open   Io
 
-    let alba_project_string: string = ".alba_project"
-    let alba_package_string: string = "alba-package.yml"
-
-
-    let readdir (path: string): string array t =
-        Io.readdir
-            (fun _ ->
-                 Error.cannot_do1 "read the directory" path)
-            path
-
-    let is_directory (path: string): bool t =
-        Io.is_directory
-            (fun _ ->
-                 Error.cannot_do1
-                     "check if the following is a directory"
-                     path)
-            path
-
-
-    let resolve_paths (paths: string list): string t =
-        let* sep = path_separator in
-        return (File_path.resolve sep paths)
-
-
-    let join_paths (paths: string list): string t =
-        let* sep = path_separator in
-        return (File_path.join sep paths)
+    let rec sequence: 'a t list -> 'a list t = function
+        | [] ->
+            return []
+        | hd :: tl ->
+            let* hd = hd in
+            let* tl = sequence tl in
+            return (hd :: tl)
 
 
     let run (prog: unit t): int =
@@ -155,6 +276,68 @@ struct
                 |> Basic_io.map (fun () -> 0)
             )
             prog
+
+
+    let alba_project_string: string = ".alba_project"
+    let alba_package_string: string = "alba-package.yml"
+
+
+    let readdir (path: string): string array t =
+        Io.readdir
+            (fun _ ->
+                 Error.cannot_do1 "read the directory" path)
+            path
+
+
+    let is_directory (path: string): bool t =
+        Io.is_directory
+            (fun _ ->
+                 Error.cannot_do1
+                     "check if the following is a directory"
+                     path)
+            path
+
+
+    let open_in (path: string): in_channel t =
+        Io.open_in
+            (fun _ ->
+                 Error.cannot_do1
+                     "open the following file for reading"
+                     path)
+            path
+
+
+    let rewind (path: string) (ch: in_channel): unit t =
+        Io.seek_in
+            (fun _ ->
+                 Error.cannot_do1 "Rewind the file" path)
+            ch
+            0
+
+
+    module Read (Sink: SINK with type item = char) =
+    struct
+        module R = Io.Read (Sink)
+
+        let from (path: string) (ch: in_channel) (sink: Sink.t): Sink.t t =
+            R.from
+                (fun _ ->
+                     Error.cannot_do1
+                         "read a character from the file"
+                         path)
+                ch
+                sink
+    end
+
+
+    let resolve_paths (paths: string list): string t =
+        let* sep = path_separator in
+        return (File_path.resolve sep paths)
+
+
+    let join_paths (paths: string list): string t =
+        let* sep = path_separator in
+        return (File_path.join sep paths)
 
 
     let fold_directory
@@ -201,6 +384,23 @@ struct
         let* cwd = Io.getcwd Error.unexpected in
         resolve_paths [cwd; wdir]
 
+
+    let parse_package_yml (dir: string): Package.t t =
+        let* file = join_paths [dir; alba_package_string] in
+        let* ch   = open_in file in
+        let module P = Package_parser.Parser in
+        let module R = Read (P) in
+        let* p    = R.from file ch Package_parser.(make () package) in
+        if P.has_succeeded p then
+            return (P.final p)
+        else
+            (Printf.printf "parse fail\n";
+            let module ER = Fmlib_parse.Error_reporter.Make (P) in
+            let module R = Read (ER) in
+            let er  = ER.make fst (fun (_, err) -> Error.to_doc err) p in
+            let* _  = rewind file ch in
+            let* er = R.from file ch er in
+            fail (Error.of_doc (ER.document er)))
 
 
     let check_nested_roots (wdir: string) (wdir_abs: string): unit t =
@@ -264,7 +464,12 @@ struct
         | None ->
             fail (Error.no_root_found wdir)
         | Some root ->
-            let* _ = collect_packages root in
+            let* pkg_dirs = collect_packages root in
+            let* pkgs =
+                sequence
+                    (List.map parse_package_yml pkg_dirs)
+            in
+            let _ = pkgs in
             assert false
 
 
