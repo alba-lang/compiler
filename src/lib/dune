@@ -1,0 +1,11 @@
+(library
+  (name lib)
+  (public_name compiler.lib)
+  (libraries fmlib_std unix)
+  (inline_tests)
+  (preprocess (pps ppx_inline_test))
+)
+
+(documentation
+  (package compiler)
+)

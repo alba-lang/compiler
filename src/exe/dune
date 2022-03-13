@@ -1,0 +1,5 @@
+(executable
+  (name alba)
+  (libraries fmlib_std fmlib_pretty lib cmdliner)
+  (modes byte)
+)

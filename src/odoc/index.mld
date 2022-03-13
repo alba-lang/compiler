@@ -1,4 +1,5 @@
 {0 Alba Compiler}
 
 
+- {{!Lib} Lib}
 - {{!page-parse} Parsing} {{!Alba_parse} API}
