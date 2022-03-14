@@ -9,11 +9,17 @@ struct
 
     type t = unit -> doc
 
+
     let of_doc (doc: doc): t =
         fun () -> doc
 
+
     let of_thunk (f: unit -> doc): t =
         f
+
+
+    let of_text (str: string): t =
+        fun () -> text str <+> cut
 
 
     let to_doc (er: t): doc =
@@ -22,6 +28,7 @@ struct
 
     let one_para (lst: doc list): doc =
         pack " " lst <+> cut
+
 
     let simple (lst: (int * doc list) list) (): doc =
         List.map
@@ -243,6 +250,192 @@ end
 
 
 
+
+module Alba_io =
+struct
+    module B = Basic_io
+
+    module type SOURCE = Fmlib_std.Interfaces.SOURCE
+    module type SINK   = Fmlib_std.Interfaces.SINK
+
+    type in_channel  = B.in_channel
+    type out_channel = B.out_channel
+
+    type 'a t = ('a, Error.t) B.t
+
+
+    (* Generic Combinators
+     * ===================
+     *)
+
+    let return: 'a -> 'a t =
+        B.return
+
+    let fail: Error.t -> 'a t =
+        B.fail
+
+    let (>>=): 'a t -> ('a -> 'b t) -> 'b t =
+        B.(>>=)
+
+    let ( let* ) = (>>=)
+
+    let map: ('a -> 'b) -> 'a t -> 'b t =
+        B.map
+
+    let catch (f: Error.t -> 'a t) (m: 'a t): 'a t =
+        B.catch f m
+
+
+    let apply_basic (e: Error.t) (m: ('a, _) B.t): 'a t =
+        B.map_error (fun _ -> e) m
+
+
+    let map_error (f: 'e -> Error.t) (m: ('a, 'e) B.t): 'a t =
+        B.map_error f m
+
+
+    let lift_basic (m: ('a, Void.t) B.t): 'a t =
+        B.map_error Void.absurd m
+
+
+    let rec sequence: 'a t list -> 'a list t = function
+        | [] ->
+            return []
+        | hd :: tl ->
+            let* hd = hd in
+            let* tl = sequence tl in
+            return (hd :: tl)
+
+
+    let run (prog: unit t): int =
+        let open B in
+        catch
+            (fun e ->
+                 let module Write = Write (Pretty) in
+                 e ()
+                 |> Pretty.layout 80
+                 |> Write.err_out
+            )
+            prog
+        |> map (fun _ -> 0)
+        |> run
+
+
+
+    (* Directory Functions
+     * ===================
+     *)
+
+    let path_separator: char t =
+        lift_basic B.path_separator
+
+
+    let path_delimiter: char t =
+        lift_basic B.path_delimiter
+
+
+    let getcwd: string t =
+        apply_basic
+            (Error.of_text "I cannot get the current directory.")
+            B.getcwd
+
+
+    let mkdir (path: string) (perm: int): unit t =
+        let str = Printf.sprintf
+                "create the following directory with \
+                 the permissions %x"
+                perm
+        in
+        apply_basic
+            (Error.cannot_do1 str path)
+            (B.mkdir path perm)
+
+
+    let rmdir (path: string): unit t =
+        apply_basic
+            (Error.cannot_do1 "remove the directory" path)
+            (B.rmdir path)
+
+
+    let readdir (path: string): string array t =
+        apply_basic
+            (Error.cannot_do1 "read the directory" path)
+            (B.readdir path)
+
+
+    let is_directory (path: string): bool t =
+        apply_basic
+            (Error.cannot_do1 "check if the following is a directory" path)
+            (B.is_directory path)
+
+
+    let remove (path: string): unit t =
+        apply_basic
+            (Error.cannot_do1 "remove the file" path)
+            (B.remove path)
+
+
+    let rename (old_path: string) (new_path: string): unit t =
+        apply_basic
+            (Error.cannot_do1 "rename the file" old_path)
+            (B.rename old_path new_path)
+
+
+
+
+
+    (* File Functions
+     * ==============
+     *)
+
+    let open_in (path: string): in_channel t =
+        apply_basic
+            (Error.cannot_do1
+                     "open the following file for reading"
+                     path)
+            (B.open_in path)
+
+
+    let close_in (path: string) (ch: in_channel): unit t =
+        apply_basic
+            (Error.cannot_do1
+                     "close the file"
+                     path)
+            (B.close_in ch)
+
+
+    let rewind (path: string) (ch: in_channel): unit t =
+        apply_basic
+            (Error.cannot_do1 "Rewind the file" path)
+            (B.seek_in ch 0)
+
+
+
+    (* Reading from Files
+     * ==================
+     *)
+    module Read (Sink: SINK with type item = char) =
+    struct
+        module BR = B.Read (Sink)
+
+        let from (path: string) (ch: in_channel) (sink: Sink.t): Sink.t t =
+            apply_basic
+                (Error.cannot_do1 "read a character from the file" path)
+                (BR.from ch sink)
+    end
+
+
+    (* Writing to Files
+     * ================
+     *)
+    module Write (Source: SOURCE with type item = char) =
+    struct
+        module BW = B.Write (Source)
+
+        let err_out (src: Source.t): (unit, Void.t) B.t =
+            BW.err_out src
+    end
+end
 
 
 
