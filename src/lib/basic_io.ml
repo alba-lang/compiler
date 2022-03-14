@@ -171,17 +171,16 @@ struct
     let from (ch: in_channel) (sink: Sink.t): (Sink.t, string) t =
         fun () ->
         try
-            let str = Stream.of_channel ch in
-            let rec read sink =
-                if Sink.needs_more sink then
-                    try
-                        read (Sink.put (Stream.next str) sink)
-                    with Stream.Failure ->
-                        Ok sink
-                else
-                    Ok sink
+            let str = Stream.of_channel ch
+            and sinkr = ref sink
             in
-            read sink
+            while Sink.needs_more !sinkr do
+                try
+                    sinkr := Sink.put (Stream.next str) !sinkr
+                with Stream.Failure ->
+                    ()
+            done;
+            Ok !sinkr
         with Sys_error str ->
             Error str
 end
