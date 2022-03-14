@@ -311,10 +311,10 @@ struct
         let open B in
         catch
             (fun e ->
-                 let module Write = Write (Pretty) in
+                 let module W = B.Write (Pretty) in
                  e ()
                  |> Pretty.layout 80
-                 |> Write.err_out
+                 |> W.err_out
             )
             prog
         |> map (fun _ -> 0)
@@ -432,7 +432,7 @@ struct
     struct
         module BW = B.Write (Source)
 
-        let err_out (src: Source.t): (unit, Void.t) B.t =
+        let err_out (src: Source.t): (unit, 'e) B.t =
             BW.err_out src
     end
 end

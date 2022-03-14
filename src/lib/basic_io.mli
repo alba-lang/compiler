@@ -49,7 +49,7 @@ val err_out: char -> (unit, Void.t) t
 
 module Write (Source: SOURCE with type item = char):
 sig
-    val err_out: Source.t -> (unit, Void.t) t
+    val err_out: Source.t -> (unit, 'e) t
 end
 
 

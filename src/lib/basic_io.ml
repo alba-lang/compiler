@@ -144,7 +144,7 @@ let input_char (ch: in_channel): (char option, string) t =
         Error str
 
 
-let err_out (c: char): (unit, Void.t) t =
+let err_out (c: char): (unit, 'e) t =
     fun () ->
     try
         Ok (prerr_char c)
@@ -154,7 +154,7 @@ let err_out (c: char): (unit, Void.t) t =
 
 module Write (Source: SOURCE with type item = char) =
 struct
-    let err_out (src: Source.t): (unit, Void.t) t =
+    let err_out (src: Source.t): (unit, 'e) t =
         let rec out src =
             if Source.has_more src then
                 let* _ = Source.peek src |> err_out in
@@ -184,17 +184,4 @@ struct
             read sink
         with Sys_error str ->
             Error str
-
-        (*let rec read sink =
-            if Sink.needs_more sink then
-                let* c = input_char ch in
-                match c with
-                | None ->
-                    return (Sink.put_end sink)
-                | Some c ->
-                    read (Sink.put c sink)
-            else
-                return sink
-        in
-        read sink*)
 end
