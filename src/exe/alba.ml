@@ -444,83 +444,11 @@ end
 
 module Alba_program =
 struct
-    module type SOURCE = Fmlib_std.Interfaces.SOURCE
-    module type SINK   = Fmlib_std.Interfaces.SINK
-
-    module Io = Lib.Io.Make (Error)
-    open   Io
-
-    let rec sequence: 'a t list -> 'a list t = function
-        | [] ->
-            return []
-        | hd :: tl ->
-            let* hd = hd in
-            let* tl = sequence tl in
-            return (hd :: tl)
-
-
-    let run (prog: unit t): int =
-        run
-            (fun e ->
-                let module Write = Write (Pretty) in
-                e ()
-                |> Pretty.layout 80
-                |> Write.err_out
-                |> Basic_io.map (fun () -> 0)
-            )
-            prog
+    include Alba_io
 
 
     let alba_project_string: string = ".alba_project"
     let alba_package_string: string = "alba-package.yml"
-
-
-    let readdir (path: string): string array t =
-        Io.readdir
-            (fun _ ->
-                 Error.cannot_do1 "read the directory" path)
-            path
-
-
-    let is_directory (path: string): bool t =
-        Io.is_directory
-            (fun _ ->
-                 Error.cannot_do1
-                     "check if the following is a directory"
-                     path)
-            path
-
-
-    let open_in (path: string): in_channel t =
-        Io.open_in
-            (fun _ ->
-                 Error.cannot_do1
-                     "open the following file for reading"
-                     path)
-            path
-
-
-    let rewind (path: string) (ch: in_channel): unit t =
-        Io.seek_in
-            (fun _ ->
-                 Error.cannot_do1 "Rewind the file" path)
-            ch
-            0
-
-
-    module Read (Sink: SINK with type item = char) =
-    struct
-        module R = Io.Read (Sink)
-
-        let from (path: string) (ch: in_channel) (sink: Sink.t): Sink.t t =
-            R.from
-                (fun _ ->
-                     Error.cannot_do1
-                         "read a character from the file"
-                         path)
-                ch
-                sink
-    end
 
 
     let resolve_paths (paths: string list): string t =
@@ -574,7 +502,7 @@ struct
 
 
     let get_work_dir (wdir: string): string t =
-        let* cwd = Io.getcwd Error.unexpected in
+        let* cwd = getcwd in
         resolve_paths [cwd; wdir]
 
 
@@ -673,10 +601,7 @@ struct
         | None ->
             let* _ = check_nested_roots wdir wdir_abs in
             let* path = join_paths [wdir_abs; alba_project_string] in
-            mkdir
-                Error.unexpected
-                path
-                0x755
+            mkdir path 0x755
         | Some root ->
             fail (Error.already_project wdir root)
 
