@@ -1,7 +1,12 @@
 (library
   (name lib)
   (public_name compiler.lib)
-  (libraries fmlib_std unix)
+  (libraries
+    unix
+    fmlib_std
+    fmlib_pretty
+    fmlib_parse
+  )
   (inline_tests)
   (preprocess (pps ppx_inline_test))
 )

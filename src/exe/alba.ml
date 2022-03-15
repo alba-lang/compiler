@@ -105,8 +105,17 @@ struct
 
 
     let expecting_one_of (lst: string list) (): doc =
+        let expect =
+            "I was expecting"
+            ^
+            (
+                match lst with
+                | [_] -> ""
+                | _   -> " one of"
+            )
+        in
         [
-            wrap_words "I was expecting one of" <+> cut;
+            wrap_words expect <+> cut;
 
             List.map (fun str -> text "- " <+> text str) lst
             |> stack ""
@@ -115,137 +124,6 @@ struct
         ]
         |> paragraphs
         <+> cut
-end
-
-
-
-
-module Package =
-struct
-    type t
-end
-
-
-module Semantic =
-struct
-    type t = Fmlib_parse.Position.range * Error.t
-end
-
-module Package_parser =
-struct
-    open Fmlib_parse
-
-    module C = Character.Make (Unit) (Package) (Semantic)
-
-    include C
-
-    let is_letter (c: char): bool =
-        ('A' <= c && c <= 'Z') || ('a' <= c && c <= 'z')
-
-    let is_digit (c: char): bool =
-        '0' <= c && c <= '9'
-
-    let is_alpha_betic (c: char): bool =
-        is_letter c || is_digit c || c = '_'
-
-    let is_key_inner (c: char): bool =
-        is_letter c || is_digit c || c = '-' || c = '_'
-
-
-    let comment: char t =
-        let* _ = char '#' in
-        let* _ =
-            (charp (fun c -> c <> '\n') "comment character")
-            |> skip_zero_or_more
-        in
-        return '#'
-
-
-    let whitespace: int t =
-        char ' ' </> char '\n' </> comment
-        |> skip_zero_or_more
-        |> no_expectations
-        |> detach
-
-
-    let lexeme (p: 'a t): 'a t =
-        let* a = p in
-        let* _ = whitespace in
-        return a
-
-
-    let located_lexeme (p: 'a t): 'a Located.t t =
-        let* a = located p in
-        let* _ = whitespace in
-        return a
-
-
-    let raw_string: string t =
-        let expect  = "printable ascii chars except '#'" in
-        let inner c = ' ' <= c && c <= '~' && c <> '#' in
-        let first c = c <> '"' && inner c
-        in
-        (word first inner expect)
-        |> map Stdlib.String.trim
-
-
-    let quoted_string: string t =
-        let expect = "printable ascii chars except double quote" in
-        let ok c = ' ' <= c && c <= '~' && c <> '\n' && c <> '"'
-        in
-        let* _   = char '"' in
-        let* str = (word ok ok expect) </> return "" in
-        let* _   = char '"' in
-        return str
-
-
-    let key: string t =
-        word is_letter is_key_inner "key"
-
-
-    let key_value (f: string Located.t -> 'a t): 'a t =
-        let* k = located_lexeme key in
-        let* _ = char ':' |> lexeme in
-        f k |> indent 1
-
-
-    let get_main (): string Located.t t =
-        key_value
-            (fun (range, id) ->
-                 if id = "main" then
-                     assert false
-                 else
-                     fail (range, Error.expecting_one_of ["main"]))
-
-
-    let used_packages (): string Located.t list t =
-        assert false
-
-
-    let library (): Package.t t =
-        assert false
-
-
-    let console_application (): Package.t t =
-        let* _ = get_main () |> align in
-        let* _ = used_packages () |> align in
-        assert false
-
-    let package: Package.t t =
-        key_value
-            (fun (range, id) ->
-                 match id with
-                 | "console-application" ->
-                     console_application ()
-
-                 | "library" ->
-                     library ()
-
-                 | _ ->
-                     fail (range,
-                           Error.expecting_one_of
-                               ["console-application"; "library"])
-            )
 end
 
 
@@ -438,6 +316,167 @@ struct
 end
 
 
+
+module Located = Fmlib_parse.Located
+
+module Console =
+struct
+    type t = {
+        main: string Located.t;
+        used: (string * string) Located.t list;
+    }
+
+    let make (main: string Located.t): t =
+        {main; used = []}
+
+    let add_used (pkg: (string * string) Located.t) (c: t): t =
+        {c with used = pkg :: c.used}
+end
+
+
+module Library =
+struct
+    type t = {
+        name: (string * string) Located.t;
+        exported: string Located.t list;
+        used: (string * string) Located.t list;
+    }
+end
+
+module Package =
+struct
+    type t =
+        | Console of Console.t
+        | Library of Library.t
+end
+
+
+module Semantic =
+struct
+    type t = Fmlib_parse.Position.range * Error.t
+end
+
+module Package_parser =
+struct
+    open Fmlib_parse
+
+    module C = Character.Make (Unit) (Package) (Semantic)
+
+    include C
+
+    let is_letter (c: char): bool =
+        ('A' <= c && c <= 'Z') || ('a' <= c && c <= 'z')
+
+    let is_digit (c: char): bool =
+        '0' <= c && c <= '9'
+
+    let is_alpha_betic (c: char): bool =
+        is_letter c || is_digit c || c = '_'
+
+    let is_key_inner (c: char): bool =
+        is_letter c || is_digit c || c = '-' || c = '_'
+
+
+    let comment: char t =
+        let* _ = char '#' in
+        let* _ =
+            (charp (fun c -> c <> '\n') "comment character")
+            |> skip_zero_or_more
+        in
+        return '#'
+
+
+    let whitespace: int t =
+        char ' ' </> char '\n' </> comment
+        |> skip_zero_or_more
+        |> no_expectations
+        |> detach
+
+
+    let lexeme (p: 'a t): 'a t =
+        let* a = p in
+        let* _ = whitespace in
+        return a
+
+
+    let located_lexeme (p: 'a t): 'a Located.t t =
+        let* a = located p in
+        let* _ = whitespace in
+        return a
+
+
+    let raw_string: string t =
+        let expect  = "printable ascii chars except '#'" in
+        let inner c = ' ' <= c && c <= '~' && c <> '#' in
+        let first c = c <> '"' && inner c
+        in
+        (word first inner expect)
+        |> map Stdlib.String.trim
+
+
+    let quoted_string: string t =
+        let expect = "printable ascii chars except double quote" in
+        let ok c = ' ' <= c && c <= '~' && c <> '\n' && c <> '"'
+        in
+        let* _   = char '"' in
+        let* str = (word ok ok expect) </> return "" in
+        let* _   = char '"' in
+        return str
+
+
+    let key: string t =
+        word is_letter is_key_inner "key"
+
+
+    let identifier: string t =
+        word is_letter is_alpha_betic "identifier"
+
+
+    let key_value (f: string Located.t -> 'a t): 'a t =
+        let* k = located_lexeme key in
+        let* _ = char ':' |> lexeme in
+        f k |> indent 1
+
+
+    let get_main (): string Located.t t =
+        key_value
+            (fun (range, id) ->
+                 if id = "main" then
+                     indent 1 (located identifier)
+                 else
+                     fail (range, Error.expecting_one_of ["main"]))
+        <?> {|"main: <module name>" The module containing "main"|}
+
+
+    let used_packages (): string Located.t list t =
+        assert false
+
+
+    let library (): Package.t t =
+        assert false
+
+
+    let console_application (): Package.t t =
+        let* _ = get_main () |> align in
+        let* _ = used_packages () |> align in
+        assert false
+
+    let package: Package.t t =
+        key_value
+            (fun (range, id) ->
+                 match id with
+                 | "console-application" ->
+                     console_application ()
+
+                 | "library" ->
+                     library ()
+
+                 | _ ->
+                     fail (range,
+                           Error.expecting_one_of
+                               ["console-application"; "library"])
+            )
+end
 
 
 
