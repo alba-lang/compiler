@@ -4,6 +4,8 @@ open Fmlib_parse
 module Pretty     = Fmlib_pretty.Print
 module String_map = Btree.Map (String)
 
+
+
 module Semantic =
 struct
     type t = (unit -> Pretty.doc) Located.t
@@ -14,6 +16,12 @@ struct
             Pretty.(text "duplicated key <"
                     <+> text key
                     <+> text ">" <+> cut)
+
+    let range ((r, _ ): t): Position.range =
+        r
+
+    let doc ((_, f): t): Pretty.doc =
+        f ()
 
 end
 
@@ -28,11 +36,41 @@ struct
     type t =
         | Scalar of scalar
         | List of sequence
-        | Map of record
+        | Map  of record
 
-    and sequence = t list
+    and sequence = Position.t * t list
 
-    and record   = (scalar * t) String_map.t * (scalar * t) list
+    and record   = Position.t * (scalar * t) String_map.t * (scalar * t) list
+
+
+
+    let scalar str = Scalar str
+
+    let list pos lst = List (pos, lst)
+
+    module Record =
+    struct
+        let empty pos = pos, String_map.empty, []
+
+        let add
+                ((range, str): scalar)
+                (e: t)
+                ((pos, map, lst): record)
+            : record option
+            =
+            match String_map.find_opt str map with
+            | None ->
+                Some (
+                    pos,
+                    String_map.add str ((range, str), e) map,
+                    ((range, str), e) :: lst
+                )
+            | Some _ ->
+                None
+
+        let finish ((pos, map, lst): record): t =
+            Map (pos, map, List.rev lst)
+    end
 
 
     let quoted_escaped (str: string): string =
@@ -43,12 +81,12 @@ struct
         | Scalar (_, str) ->
             quoted_escaped str
 
-        | List lst ->
+        | List (_, lst) ->
             "["
             ^ String.concat ", " (List.map to_json_string lst)
             ^ "]"
 
-        | Map (_, lst) ->
+        | Map (_, _, lst) ->
             let lst =
                 List.map
                     (fun ((_, str), y) ->
@@ -58,37 +96,36 @@ struct
             "{" ^ String.concat ", " lst ^ "}"
 
 
-    let scalar str = Scalar str
+    let rec range: t -> Position.range = function
+        | Scalar (r, _) ->
+            r
 
-    let list lst = List lst
+        | List (pos0, lst) ->
+            List.fold_left
+                (fun r y ->
+                     Position.merge r (range y))
+                (pos0, pos0)
+                lst
 
-    module Record =
-    struct
-        let empty = String_map.empty, []
-
-        let add
-                ((range, str): scalar)
-                (e: t)
-                ((map, lst): record)
-            : record option
-            =
-            match String_map.find_opt str map with
-            | None ->
-                Some (
-                    String_map.add str ((range, str), e) map,
-                    ((range, str), e) :: lst
+        | Map (pos0, _, lst) ->
+            List.fold_left
+                (fun r ((rk, _), y) ->
+                     Position.(
+                         merge r (merge rk (range y))
+                     )
                 )
-            | Some _ ->
-                None
-
-        let finish ((map, lst): record): t =
-            Map (map, List.rev lst)
-    end
+                (pos0,pos0)
+                lst
 end
+
+
+
 
 
 module Decode =
 struct
+    type error = (unit -> Position.range) * (unit -> Pretty.doc)
+
     type 'a t = Yaml.t -> 'a option
 
 
@@ -117,11 +154,16 @@ struct
         return (f a)
 
 
+    let yaml: Yaml.t t =
+        fun y -> Some y
+
+
     let string: string t = function
         | Yaml.Scalar (_, str) ->
             Some str
         | _ ->
             None
+
 
     let int: int t =
         let* str = string in
@@ -137,8 +179,9 @@ struct
         let* str = string in
         fun _ -> float_of_string_opt str
 
+
     let field (key: string) (dec: 'a t): 'a t = function
-        | Yaml.Map (map, _) ->
+        | Yaml.Map (_, map, _) ->
             begin
                 match String_map.find_opt key map with
                 | None ->
@@ -149,6 +192,10 @@ struct
         | _ ->
             None
 end
+
+
+
+
 
 
 
@@ -266,16 +313,18 @@ struct
      * ========================
      *)
 
-    let rec json_object (): Yaml.t t =
+    let rec json_object (pos: Position.t): Yaml.t t =
         let* _ = char '{' >>= strip in
+        let empty = Yaml.Record.empty pos
+        in
         let* r =
             one_or_more_separated
-                (add_record_element Yaml.Record.empty)
+                (add_record_element empty)
                 (fun r _ e -> add_record_element r e)
                 (json_object_element ())
                 (char ',' >>= strip)
             </>
-            return Yaml.Record.empty
+            return empty
         in
         let* _ = char '}' >>= strip in
         return (Yaml.Record.finish r)
@@ -288,7 +337,7 @@ struct
         return (str, y)
 
 
-    and json_array (): Yaml.t t =
+    and json_array (pos: Position.t): Yaml.t t =
         let* _ = char '[' >>= strip in
         let* lst =
             one_or_more_separated
@@ -300,13 +349,15 @@ struct
             return []
         in
         let* _ = char ']' >>= strip in
-        return (List.rev lst |> Yaml.list)
+        return (Yaml.list pos (List.rev lst))
 
 
 
 
     and json_atom (): Yaml.t t =
-        json_object () </> json_array () </> scalar
+        let* pos = position
+        in
+        json_object (pos) </> json_array (pos) </> scalar
 
 
 
@@ -320,13 +371,14 @@ struct
     *)
 
     let rec yaml (): Yaml.t t =
-        json_array ()
-        </> json_object ()
-        </> sequence_block ()
-        </> record_block_or_scalar ()
+        let* pos = position in
+        json_array pos
+        </> json_object pos
+        </> sequence_block pos
+        </> record_block_or_scalar pos
 
 
-    and record_block_or_scalar (): Yaml.t t =
+    and record_block_or_scalar (pos: Position.t): Yaml.t t =
         (* See Note [Left factoring] *)
         let* str, y =
             string_or_record_element ()
@@ -337,7 +389,7 @@ struct
         | None ->
             Yaml.scalar str |> return
         | Some y ->
-            let* r = add_record_element Yaml.Record.empty (str, y)
+            let* r = add_record_element (Yaml.Record.empty pos) (str, y)
             in
             let* r =
                 zero_or_more_fold_left
@@ -370,12 +422,14 @@ struct
 
 
         and value_in_record (): Yaml.t t =
-            (sequence_block () |> indent 0)
+            let* pos = position
+            in
+            (sequence_block pos |> indent 0)
             </>
-            (record_block_or_scalar () |> indent 1)
+            (record_block_or_scalar pos |> indent 1)
 
 
-        and sequence_block (): Yaml.t t =
+        and sequence_block (pos: Position.t): Yaml.t t =
             one_or_more
                 (
                     sequence_element ()
@@ -384,7 +438,7 @@ struct
                     |> align
                 )
             <?> "sequence of aligned \"- xxxx\""
-            |> map (fun (a, lst) -> Yaml.list (a :: lst))
+            |> map (fun (a, lst) -> Yaml.list pos (a :: lst))
 
 
         and sequence_element (): Yaml.t t =
@@ -408,9 +462,6 @@ struct
             make () (let* _ = whitespace in yaml ())
 end
 
-
-
-open Combinator
 
 
 
@@ -459,15 +510,16 @@ open Combinator
  * ==========
  *)
 
+open Combinator
+
+
 
 let write_errors (source: string) (p: Parser.t): unit =
     let open Parser in
-    let open Error_reporter
-    in
     assert (has_result p);
     assert (not (has_succeeded p));
-    make fst (fun (_, f) -> f ()) p
-    |> run_on_string source
+    Error_reporter.make Semantic.range Semantic.doc p
+    |> Error_reporter.run_on_string source
     |> Pretty.layout 80
     |> Pretty.write_to_channel stdout
 
@@ -518,6 +570,10 @@ let success_cases =
 
         {|{a: [1,2], b: ","}|},
         {|{"a": ["1", "2"], "b": ","}|};
+
+        {|[]|}, {|[]|};     (* empty array is possible *)
+
+        {|{}|}, {|{}|};     (* empty object is possible *)
 
     ]
 
