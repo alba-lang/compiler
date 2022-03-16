@@ -3,17 +3,20 @@ open Fmlib_parse
 
 module type ANY   = Fmlib_std.Interfaces.ANY
 
-module Pretty     = Fmlib_pretty.Print
 module String_map = Btree.Map (String)
 
+module Pretty    = Fmlib_pretty.Print
 
 
-module Semantic =
+
+module Error =
 struct
-    type to_range = unit -> Position.range
-    type to_doc   = unit -> Pretty.doc
+    type doc         = Pretty.doc
 
-    type t = to_range * to_doc
+    type range_thunk = unit -> Position.range
+    type doc_thunk   = unit -> doc
+
+    type t = range_thunk * doc_thunk
 
 
     let thunk (a: 'a) (): 'a =
@@ -22,10 +25,10 @@ struct
     let range ((f, _ ): t): Position.range =
         f ()
 
-    let doc ((_, f): t): Pretty.doc =
+    let doc ((_, f): t): doc =
         f ()
 
-    let one_para (lst: Pretty.doc list): Pretty.doc =
+    let one_para (lst: doc list): doc =
         Pretty.(pack " " lst <+> cut <+> cut)
 
 
@@ -39,7 +42,7 @@ struct
         )
 
 
-    let missing_key (f: to_range) (key: string): t =
+    let missing_key (f: range_thunk) (key: string): t =
         f,
         (fun () ->
              let open Pretty in
@@ -52,7 +55,7 @@ struct
         )
 
 
-    let length (n: int) (f: to_range): t =
+    let length (n: int) (f: range_thunk): t =
         f,
         (fun () ->
              let open Pretty in
@@ -65,7 +68,7 @@ struct
         )
 
 
-    let expect (f: to_range) (str: string): t =
+    let expect (f: range_thunk) (str: string): t =
         f,
         (fun () ->
              let open Pretty in
@@ -181,24 +184,18 @@ end
 
 module Decode =
 struct
-    type error = (unit -> Position.range) * (unit -> Pretty.doc)
-
-    let range ((f, _): error): Position.range =
-        f ()
+    type 'a t = Yaml.t -> ('a, Error.t) result
 
 
-    let doc ((_, f): error): Pretty.doc =
-        f ()
-
-
-    type 'a t = Yaml.t -> ('a, error) result
+    let decode (y: Yaml.t) (d: 'a t): ('a, Error.t) result =
+        d y
 
 
     let return (a: 'a): 'a t =
         fun _ -> Ok a
 
 
-    let fail (e: Semantic.t): 'a t =
+    let fail (e: Error.t): 'a t =
         fun _ -> Error e
 
 
@@ -231,7 +228,7 @@ struct
         | Yaml.Scalar str ->
             Ok str
         | y ->
-            Error (Semantic.expect (Yaml.range y) expect)
+            Error (Error.expect (Yaml.range y) expect)
 
 
     let string: string t =
@@ -242,7 +239,7 @@ struct
         let* r, str = string_expect expect in
         match f str with
         | None ->
-            Semantic.expect (fun () -> r) expect |> fail
+            Error.expect (fun () -> r) expect |> fail
         | Some v ->
             return v
 
@@ -274,7 +271,7 @@ struct
                 match String_map.find_opt key map with
                 | None ->
                     Error (
-                        Semantic.missing_key
+                        Error.missing_key
                             (Yaml.range y)
                             key
                     )
@@ -282,7 +279,7 @@ struct
                     dec y
             end
         | _ ->
-            Error (Semantic.expect (Yaml.range y) "a record")
+            Error (Error.expect (Yaml.range y) "a record")
 
 
     let element (i: int) (d: 'a t): 'a t =
@@ -292,11 +289,11 @@ struct
         | Yaml.Seq (_, arr) ->
             let len = Array.length arr in
             if len <= i then
-                Error (Semantic.length (i + 1) (Yaml.range y))
+                Error (Error.length (i + 1) (Yaml.range y))
             else
                 d arr.(i)
         | _ ->
-            Error (Semantic.expect (Yaml.range y) "an array")
+            Error (Error.expect (Yaml.range y) "an array")
 
 
 
@@ -315,7 +312,7 @@ struct
             in
             traverse 0 [||]
         | _ ->
-            Error (Semantic.expect (Yaml.range y) "an array")
+            Error (Error.expect (Yaml.range y) "an array")
 
 end
 
@@ -328,12 +325,13 @@ end
 
 module Make (Final: ANY) =
 struct
-    module B = Character.Make (Unit) (Final) (Semantic)
+    module B = Character.Make (Unit) (Final) (Error)
 
     include B
 
 
     let special_chars: string = {|{}[]&*#?|-<>=!%@:`,'"|} (* '<' really? *)
+    let _ = special_chars
 
 
 
@@ -429,7 +427,7 @@ struct
         | Some r ->
             return r
         | None ->
-            fail (Semantic.duplicate_key key)
+            fail (Error.duplicate_key key)
 
 
 
@@ -664,7 +662,7 @@ let write_errors (source: string) (p: Parser.t): unit =
     let open Parser in
     assert (has_result p);
     assert (not (has_succeeded p));
-    Error_reporter.make Semantic.range Semantic.doc p
+    Error_reporter.make Error.range Error.doc p
     |> Error_reporter.run_on_string source
     |> Pretty.layout 80
     |> Pretty.write_to_channel stdout
@@ -703,6 +701,7 @@ let test_failed (input: string) (d: string Decode.t) (expect: string): bool =
             true
     else
         true
+let _ = test_failed
 
 
 let success_cases =
