@@ -1,5 +1,8 @@
 open Fmlib_std
+open Fmlib_parse
 open Lib
+
+module type ANY = Fmlib_std.Interfaces.ANY
 
 module Pretty = Fmlib_pretty.Print
 
@@ -200,9 +203,11 @@ struct
 
 
 
-    (* Directory Functions
-     * ===================
+
+    (* Paths
+     * =====
      *)
+
 
     let path_separator: char t =
         lift_basic B.path_separator
@@ -211,6 +216,21 @@ struct
     let path_delimiter: char t =
         lift_basic B.path_delimiter
 
+
+    let resolve_paths (paths: string list): string t =
+        let* sep = path_separator in
+        return (File_path.resolve sep paths)
+
+
+    let join_paths (paths: string list): string t =
+        let* sep = path_separator in
+        return (File_path.join sep paths)
+
+
+
+    (* Directory Functions
+     * ===================
+     *)
 
     let getcwd: string t =
         apply_basic
@@ -258,6 +278,50 @@ struct
             (Error.cannot_do1 "rename the file" old_path)
             (B.rename old_path new_path)
 
+
+
+    (* Traversing a Directory
+     * ======================
+     *)
+
+    let fold_directory
+            (enter: string -> string array -> 'a -> (bool * 'a) t)
+            (file:  string -> string -> string -> 'a -> 'a t)
+            (child_dir:   string -> string -> string -> 'a -> 'a t)
+            (start: 'a)
+            (dir: string)
+        : 'a t
+        (* entries (file and child_dir) are called with
+                parent_abs
+                child
+                child_abs
+        *)
+        =
+        let rec fold a dir =
+            let* es       = readdir dir in
+            let* down, a  = enter dir es a in
+            let n         = Array.length es in
+            let rec entry i a =
+                if i = n then
+                    return a
+                else
+                    let* child   = join_paths [dir; es.(i)] in
+                    let* isdir   = is_directory child in
+                    let* a =
+                        if isdir then
+                            let* a = child_dir dir es.(i) child a in
+                            if down then
+                                fold a child
+                            else
+                                return a
+                        else
+                            file dir es.(i) child a
+                    in
+                    entry (i + 1) a
+            in
+            entry 0 a
+        in
+        fold start dir
 
 
 
@@ -312,6 +376,57 @@ struct
 
         let err_out (src: Source.t): (unit, 'e) B.t =
             BW.err_out src
+    end
+
+
+
+    (* Parsing Files
+     * =============
+     *)
+
+    module type PARSER =
+    sig
+        include Fmlib_parse.Interfaces.NORMAL_PARSER
+            with type token = char
+             and type expect = string * Indent.expectation option
+
+        val position: t -> Position.t
+        val range:    semantic -> Position.range
+        val doc:      semantic -> Pretty.doc
+    end
+
+
+    module Parse (P: PARSER) =
+    struct
+        let parse (path: string) (p: P.t): P.final t =
+            let module R = Read (P) in
+            let* ch = open_in path in
+            let* p  = R.from path ch p in
+            if P.has_succeeded p then
+                let* _ = close_in path ch in
+                return (P.final p)
+            else
+                let module ER = Error_reporter.Make (P) in
+                let module R  = Read (ER) in
+                let er  = ER.make P.range P.doc  p in
+                let* _  = rewind path ch in
+                let* er = R.from path ch er in
+                let* _  = close_in path ch in
+                let pos =
+                    if P.has_failed_syntax p then
+                        P.position p
+                    else
+                        P.(failed_semantic p |> range |> fst)
+                in
+                let str = Printf.sprintf
+                        "%s:%d:%d Error"
+                        path
+                        (Position.line pos + 1)
+                        (Position.column pos + 1)
+                in
+                Pretty.(cat [text str; cut; fill 60 '-'; cut; ER.document er])
+                |> Error.of_doc
+                |> fail
     end
 end
 
@@ -392,76 +507,18 @@ struct
     let alba_package_string: string = "alba-package.yml"
 
 
-    let resolve_paths (paths: string list): string t =
-        let* sep = path_separator in
-        return (File_path.resolve sep paths)
-
-
-    let join_paths (paths: string list): string t =
-        let* sep = path_separator in
-        return (File_path.join sep paths)
-
-
-    let fold_directory
-            (enter: string -> string array -> 'a -> (bool * 'a) t)
-            (file:  string -> string -> string -> 'a -> 'a t)
-            (child_dir:   string -> string -> string -> 'a -> 'a t)
-            (start: 'a)
-            (dir: string)
-        : 'a t
-        (* entries (file and child_dir) are called with
-                parent_abs
-                child
-                child_abs
-        *)
-        =
-        let rec fold a dir =
-            let* es       = readdir dir in
-            let* down, a  = enter dir es a in
-            let n         = Array.length es in
-            let rec entry i a =
-                if i = n then
-                    return a
-                else
-                    let* child   = join_paths [dir; es.(i)] in
-                    let* isdir   = is_directory child in
-                    let* a =
-                        if isdir then
-                            let* a = child_dir dir es.(i) child a in
-                            if down then
-                                fold a child
-                            else
-                                return a
-                        else
-                            file dir es.(i) child a
-                    in
-                    entry (i + 1) a
-            in
-            entry 0 a
-        in
-        fold start dir
-
-
     let get_work_dir (wdir: string): string t =
         let* cwd = getcwd in
         resolve_paths [cwd; wdir]
 
 
     let parse_package_yml (dir: string): Package.t t =
-        let* file = join_paths [dir; alba_package_string] in
-        let* ch   = open_in file in
-        let module P = Package_parser.Parser in
-        let module R = Read (P) in
-        let* p    = R.from file ch Package_parser.init in
-        if P.has_succeeded p then
-            return (P.final p)
-        else
-            let module ER = Fmlib_parse.Error_reporter.Make (P) in
-            let module R = Read (ER) in
-            let er  = ER.make P.range P.doc p in
-            let* _  = rewind file ch in
-            let* er = R.from file ch er in
-            fail (Error.of_doc (ER.document er))
+        let module P = Parse (Package_parser.Parser) in
+        let* file    = join_paths [dir; alba_package_string] in
+        P.parse
+            file
+            Package_parser.init
+
 
 
     let check_nested_roots (wdir: string) (wdir_abs: string): unit t =
