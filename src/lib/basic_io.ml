@@ -174,13 +174,13 @@ struct
             let str = Stream.of_channel ch
             and sinkr = ref sink
             in
-            while Sink.needs_more !sinkr do
-                try
-                    sinkr := Sink.put (Stream.next str) !sinkr
-                with Stream.Failure ->
-                    ()
-            done;
-            Ok !sinkr
+            try
+                while Sink.needs_more !sinkr do
+                    sinkr := Sink.put (Stream.next str) !sinkr;
+                done;
+                Ok !sinkr
+            with Stream.Failure ->
+                Ok (Sink.put_end !sinkr)
         with Sys_error str ->
             Error str
 end
