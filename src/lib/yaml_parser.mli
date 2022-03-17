@@ -6,15 +6,15 @@ module String_map:
     MAP with type key = string
 
 
+type doc         = Fmlib_pretty.Print.doc
+
+type range_thunk = unit -> Position.range
+type doc_thunk   = unit -> doc
+
 
 
 module Error:
 sig
-    type doc         = Fmlib_pretty.Print.doc
-
-    type range_thunk = unit -> Position.range
-    type doc_thunk   = unit -> doc
-
     type t = range_thunk * doc_thunk
 
     val range: t -> Position.range
@@ -51,7 +51,7 @@ sig
 
     val return: 'a -> 'a t
 
-    val fail: Error.t -> 'a t
+    val fail: doc_thunk -> 'a t
 
     val (>>=):   'a t -> ('a -> 'b t) -> 'b t
 
@@ -62,6 +62,10 @@ sig
     val yaml: Yaml.t t
 
     val json_string: string t
+
+    val range: Position.range t
+
+    val located_string: string Located.t t
 
     val string: string t
 
@@ -89,6 +93,12 @@ sig
              and type final    = Final.t
              and type expect   = string * Indent.expectation option
              and type semantic = Error.t
+
+        val position: t -> Position.t
+
+        val range: semantic -> Position.range
+
+        val doc: semantic -> doc
     end
 
     val of_decoder: Final.t Decode.t -> Parser.t

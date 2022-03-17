@@ -5,17 +5,15 @@ module type ANY   = Fmlib_std.Interfaces.ANY
 
 module String_map = Btree.Map (String)
 
-module Pretty    = Fmlib_pretty.Print
 
+type doc         = Fmlib_pretty.Print.doc
+
+type range_thunk = unit -> Position.range
+type doc_thunk   = unit -> doc
 
 
 module Error =
 struct
-    type doc         = Pretty.doc
-
-    type range_thunk = unit -> Position.range
-    type doc_thunk   = unit -> doc
-
     type t = range_thunk * doc_thunk
 
 
@@ -27,9 +25,6 @@ struct
 
     let doc ((_, f): t): doc =
         f ()
-
-    let one_para (lst: doc list): doc =
-        Pretty.(pack " " lst <+> cut <+> cut)
 
 
     let duplicate_key ((range,key): string Located.t): t =
@@ -46,12 +41,12 @@ struct
         f,
         (fun () ->
              let open Pretty in
-             one_para
-                 [
-                     wrap_words "A field with the key";
-                     char '"' <+> text key <+> char '"';
-                     wrap_words "is missing"
-                 ]
+             Doc.p [
+                 wrap_words "A field with the key";
+                 char '"' <+> text key <+> char '"';
+                 wrap_words "is missing"
+             ]
+             <+> cut
         )
 
 
@@ -59,12 +54,12 @@ struct
         f,
         (fun () ->
              let open Pretty in
-             one_para
-                 [
-                     wrap_words "I was expecting a sequence with at last";
-                     text (string_of_int n);
-                     text "elements.";
-                 ]
+             Doc.p [
+                 wrap_words "I was expecting a sequence with at last";
+                 text (string_of_int n);
+                 text "elements.";
+             ]
+             <+> cut
         )
 
 
@@ -72,11 +67,11 @@ struct
         f,
         (fun () ->
              let open Pretty in
-             one_para
-                 [
-                     wrap_words "I was expecting";
-                     wrap_words str
-                 ]
+             Doc.p [
+                 wrap_words "I was expecting";
+                 wrap_words str
+             ]
+             <+> cut
         )
 end
 
@@ -195,8 +190,8 @@ struct
         fun _ -> Ok a
 
 
-    let fail (e: Error.t): 'a t =
-        fun _ -> Error e
+    let fail (f: doc_thunk): 'a t =
+        fun y -> Error (Yaml.range y, f)
 
 
     let (>>=) (m: 'a t) (f: 'a -> 'b t): 'b t =
@@ -231,15 +226,23 @@ struct
             Error (Error.expect (Yaml.range y) expect)
 
 
+    let range: Position.range t =
+        fun y -> Ok (Yaml.range y ())
+
+
+    let located_string: string Located.t t =
+        string_expect "a yaml scalar value"
+
+
     let string: string t =
-        map snd (string_expect "a yaml scalar value")
+        map snd located_string
 
 
     let special_string (expect: string) (f: string -> 'a option): 'a t =
         let* r, str = string_expect expect in
         match f str with
         | None ->
-            Error.expect (fun () -> r) expect |> fail
+            fun _ -> Error (Error.expect (fun () -> r) expect)
         | Some v ->
             return v
 
@@ -329,6 +332,24 @@ struct
 
     include B
 
+    module Parser =
+    struct
+        include B.Parser
+
+        (* Semantic errors
+         * ===============
+         *)
+
+        let put (c: char) (p: t): t =
+            put c p
+
+        let range: Error.t -> Position.range =
+            Error.range
+
+        let doc: Error.t -> doc =
+            Error.doc
+    end
+
 
     let special_chars: string = {|{}[]&*#?|-<>=!%@:`,'"|} (* '<' really? *)
     let _ = special_chars
@@ -371,7 +392,7 @@ struct
 
 
     let dash: char t =
-        char ':'
+        char '-'
 
 
     let raw_string: string t =
@@ -548,6 +569,10 @@ struct
         and value_in_record (): Yaml.t t =
             let* pos = position
             in
+            (json_array pos |> indent 1)
+            </>
+            (json_object pos |> indent 1)
+            </>
             (sequence_block pos |> indent 0)
             </>
             (record_block_or_scalar pos |> indent 1)
@@ -708,6 +733,19 @@ let success_cases =
     let open Decode in
     [
         json_string, "hello", {|"hello"|};
+
+        json_string,
+        {| k: [a,b] |},
+        {|{"k": ["a", "b"]}|};
+
+        json_string,
+        {|
+        k:
+        - a
+        - b
+        - c
+        |},
+        {|{"k": ["a", "b", "c"]}|};
 
         json_string,
         {|
