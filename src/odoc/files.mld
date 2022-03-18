@@ -1,0 +1,48 @@
+{0 Alba Files}
+
+{{!page-index} Up}
+
+
+{1 Project}
+
+Projects cannot be nested. A project directory has a subdirectory named
+[.alba-project] where all generated files are stored.
+
+Projects contain packages. Packages cannot be nested either and cannot overlap.
+Each package in a project has an own subdirectory or the project contains only
+one package. For a one-package project, the project and the package directory
+can be the same.
+
+The compiler does initially the following actions when started within a project:
+
+- It finds the root of the project (i.e. a directory with subdirectory
+  [.alba-project]) and checks that it does not contain nested projects. It is
+not necessary to check if the root is nested within some other project, because
+this check is done, when the compiler is started within the outer project.
+
+- It collects all packages within the project and parses the corresponding
+  [alba-package.yml] file. Package subdirectories are not traversed. I.e. nested
+packages are not found, they are invisible.
+
+- It checks that all used packages exist and there are not cyclic dependencies
+  between the packages.
+
+- It checks that for each package a corresponding build directory exists within
+  [.alba-project]. If not, it creates the corresponding directory.
+
+- It collects all modules [.al] and [.ali] files of each package within the
+  source directory of each package and checks, if they are newer than the
+compiled files.
+
+- It checks that all exported modules exist.
+
+
+
+
+{1 File Paths}
+
+Within a project all paths are stored relative to the root. With that convention
+finding files in the source tree and in the build tree are easy to find.
+
+To the user (e.g. in error messages) files shall be displayed relative to the
+current directory.
