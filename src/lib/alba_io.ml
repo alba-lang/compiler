@@ -62,9 +62,9 @@ let run (prog: unit t): int =
              e ()
              |> Pretty.layout 80
              |> W.err_out
+             |> map (fun _ -> 1)
         )
-        prog
-    |> map (fun _ -> 0)
+        (map (fun _ -> 0) prog)
     |> run
 
 
