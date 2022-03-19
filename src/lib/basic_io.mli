@@ -1,5 +1,15 @@
 open Fmlib_std
 
+module Stat:
+sig
+    type time
+    type t
+
+    val (<) : time -> time -> bool
+
+    val last_modification: t -> time
+end
+
 module type SOURCE = Fmlib_std.Interfaces.SOURCE
 module type SINK   = Fmlib_std.Interfaces.SINK
 
@@ -35,6 +45,7 @@ val rmdir: string -> (unit, string) t
 val is_directory: string -> (bool, string) t
 val remove: string -> (unit, string) t
 val rename: string -> string -> (unit, string) t
+val stat: string -> (Stat.t, string) t
 
 
 val path_separator: (char, Void.t) t

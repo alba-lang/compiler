@@ -6,6 +6,19 @@ module type SINK   = Fmlib_std.Interfaces.SINK
 type in_channel  = Stdlib.in_channel
 type out_channel = Stdlib.out_channel
 
+module Stat =
+struct
+    type time = float
+    type t = Unix.stats
+
+    let (<) (a: time) (b: time): bool =
+        a < b
+
+    let last_modification (s: t): time =
+        s.st_mtime
+end
+
+
 type ('a, 'e) t = unit -> ('a, 'e) result
 
 let return (type a e) (a: a): (a, e) t =
@@ -103,6 +116,10 @@ let remove (path: string): (unit, string) t =
 
 let rename (old_path: string) (new_path: string): (unit, string) t =
     sys (fun () -> Sys.rename old_path new_path)
+
+
+let stat (path: string): (Stat.t, string) t =
+    unix (fun () -> Unix.stat path)
 
 
 let path_separator: (char, Void.t) t =
