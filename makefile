@@ -26,3 +26,8 @@ alba.exe:
 .PHONY: test_alba
 test_alba:
 	dune exec src/exe/alba.bc -- --work-dir=src/alba_src
+
+
+.PHONY: exec_alba
+exec_alba:
+	dune exec src/exe/alba.bc -- $(alba_args)
