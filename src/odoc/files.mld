@@ -5,6 +5,8 @@
 
 {1 Project}
 
+{2 Structure}
+
 Projects cannot be nested. A project directory has a subdirectory named
 [.alba-project] where all generated files are stored.
 
@@ -12,6 +14,34 @@ Projects contain packages. Packages cannot be nested either and cannot overlap.
 Each package in a project has an own subdirectory or the project contains only
 one package. For a one-package project, the project and the package directory
 can be the same.
+
+Structure of a project:
+
+{v
+
+    project-dir/
+        .alba-build/            # build directory
+            pkg1/               # dirnames are package names
+                m1.cal          # modules are flat
+                m1.js
+            pkg2/
+            ...
+        yyy/
+            alba-package.yml
+            src/                # modules can be in subdir
+                m1.al, m1.ali, m2.al, m2.ali
+        zzz/
+            alba-package.yml
+            m1.al, m1.ali, m2.al, m2.ali
+        ...
+        # deeper directory strucure possible
+        # if packages are not in subdirs only one package is possible
+v}
+
+
+
+
+{2 Initial Checks}
 
 The compiler does initially the following actions when started within a project:
 
@@ -37,6 +67,30 @@ compiled files.
 - It checks that all exported modules exist.
 
 
+
+
+{1 Installed Libraries}
+
+{v
+    $HOME/
+        .alba/
+            libraries/
+                .alba-build/
+                    # build directory
+                    pkg1/               # dirnames are package names
+                        version1/
+                            m1.cal
+                    pkg2/
+                    ...
+                pkg1/
+                    version1/
+                        alba-package.yml
+                        ...
+                    version2/
+                        ...
+                pkg2/
+                ...
+v}
 
 
 {1 File Paths}
