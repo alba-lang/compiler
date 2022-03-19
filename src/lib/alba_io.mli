@@ -29,13 +29,16 @@ val path_delimiter: char t
 
 val resolve_paths: string list -> string t
 val join_paths:    string list -> string t
-val relative_path: string -> string -> string t
+val relative_path: string -> string t
+val dirname:  string -> string t
+val basename: string -> string t
 
 val getcwd: string t
 val mkdir: string -> int -> unit t
 val rmdir: string -> unit t
 val readdir: string -> string array t
 val is_directory: string -> bool t
+val is_root_directory: string -> bool t
 
 val remove: string -> unit t
 val rename: string -> string -> unit t

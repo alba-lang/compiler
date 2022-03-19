@@ -94,7 +94,7 @@ struct
 
 
 
-    let check_nested_roots (wdir: string) (wdir_abs: string): unit t =
+    let check_nested_roots (wdir: string): unit t =
         (* Precondition: [wdir] is a directory. *)
         fold_directory
             (fun dir es () ->
@@ -106,7 +106,7 @@ struct
             (fun _ _ _  -> return)
             (fun _ _ _  a -> return (true, a))
             ()
-            wdir_abs
+            wdir
 
 
 
@@ -130,26 +130,23 @@ struct
 
 
 
-    let find_root (wdir_abs: string): string option t =
-        let rec find dir files =
-            match
-                Array.find (fun file -> file = alba_project_string) files
-            with
+    let find_root (wdir: string): string option t =
+        let* cd = getcwd in
+        let* dir= resolve_paths [cd; wdir] in
+        let rec find dir =
+            let* files = readdir dir in
+            match Array.find ((=) alba_project_string) files with
             | None ->
-                let* sep = path_separator in
-                if dir = String.one sep then
+                let* is_top = is_root_directory dir in
+                if is_top then
                     return None
                 else
-                    let  dir   = File_path.dirname sep dir in
-                    let* files =
-                        readdir dir in
-                    find dir files
+                    let* upper = dirname dir in
+                    find upper
             | Some _ ->
                 return (Some dir)
         in
-        let* files = readdir wdir_abs
-        in
-        find wdir_abs files
+        find dir
 
 
     let compile_action (wdir: string): unit t =
@@ -169,15 +166,15 @@ struct
 
 
     let init_action (wdir: string): unit t =
-        let* wdir_abs = get_work_dir wdir in
-        let* root = find_root wdir_abs in
+        let* root = find_root wdir in
         match root with
         | None ->
-            let* _ = check_nested_roots wdir wdir_abs in
-            let* path = join_paths [wdir_abs; alba_project_string] in
+            let* _ = check_nested_roots wdir in
+            let* path = join_paths [wdir; alba_project_string] in
             mkdir path 0x755
         | Some root ->
-            fail (Pretty_error.already_project wdir root)
+            let* rel_root = relative_path root in
+            fail (Pretty_error.already_project wdir rel_root)
 
 
     let compile (wdir: string): int =

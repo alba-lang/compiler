@@ -93,9 +93,14 @@ let join_paths (paths: string list): string t =
     return (File_path.join sep paths)
 
 
-let relative_path (from: string) (to_: string): string t =
+let dirname (path: string): string t =
     let* sep = path_separator in
-    File_path.relative sep from to_ |>  return
+    File_path.dirname sep path |> return
+
+
+let basename (path: string): string t =
+    let* sep = path_separator in
+    File_path.basename sep path |> return
 
 
 
@@ -107,6 +112,12 @@ let getcwd: string t =
     apply_basic
         (Pretty_error.of_text "I cannot get the current directory.")
         B.getcwd
+
+
+let relative_path (path: string): string t =
+    let* sep = path_separator in
+    let* wd  = getcwd in
+    File_path.relative sep wd path |>  return
 
 
 let mkdir (path: string) (perm: int): unit t =
@@ -136,6 +147,11 @@ let is_directory (path: string): bool t =
     apply_basic
         (Pretty_error.cannot_do1 "check if the following is a directory" path)
         (B.is_directory path)
+
+
+let is_root_directory (path: string): bool t =
+    let* sep = path_separator in
+    File_path.is_root sep path |> return
 
 
 let remove (path: string): unit t =

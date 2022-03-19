@@ -246,6 +246,10 @@ let basename (sep: char) (path: string): string =
 
 
 
+let is_root (sep: char) (path: string): bool =
+    String.length path = 1
+    &&
+    path.[0] = sep
 
 
 

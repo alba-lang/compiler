@@ -81,8 +81,12 @@ val relative: char -> string -> string -> string
     [a] to [b].
 *)
 
+
+
 (** {1 Dirname and Basename} *)
 
 val dirname: char -> string -> string
 
 val basename: char -> string -> string
+
+val is_root: char -> string -> bool
