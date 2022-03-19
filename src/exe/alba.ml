@@ -9,62 +9,9 @@ module Located = Fmlib_parse.Located
 
 
 
-module Package =
-struct
-    type t = unit
-end
-
-
 module Semantic =
 struct
     type t = Fmlib_parse.Position.range * Pretty_error.doc_thunk
-end
-
-
-module Package_parser =
-struct
-    open Yaml_parser
-    module P = Make (Package)
-
-    include P
-
-    let type_decoder: string Decode.t =
-        let open Decode in
-        let* str = string in
-        if str = "console-application" then
-            return str
-        else if str = "library" then
-            return str
-        else
-            fail (fun () ->
-                let open Pretty in
-                wrap_words {|must be one of ["console-application", "library"]|}
-                <+> cut <+> cut
-            )
-
-    let decoder: Package.t Decode.t =
-        let open Decode in
-        let* tp   = field "type" type_decoder in
-        let* _ =
-            field
-                "use"
-                (array located_string)
-        in
-        if tp = "console-application" then
-            let* _ = field "main" located_string in
-            return ()
-        else if tp = "library" then
-            let* _ =
-                field
-                    "export"
-                    (array located_string)
-            in
-            return ()
-        else
-            assert false (* cannot happen *)
-
-    let init: Parser.t =
-        of_decoder decoder
 end
 
 
@@ -85,12 +32,12 @@ struct
         resolve_paths [cwd; wdir]
 
 
-    let parse_package_yml (dir: string): Package.t t =
-        let module P = Parse (Package_parser.Parser) in
+    let parse_package_yml (dir: string): Packages.Package.t t =
+        let module P = Parse (Packages.Parser) in
         let* file    = join_paths [dir; alba_package_string] in
         P.parse
             file
-            Package_parser.init
+            Packages.Parser.init
 
 
 
