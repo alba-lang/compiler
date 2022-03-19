@@ -47,6 +47,7 @@ val fold_directory:
     (string -> string array -> 'a -> (bool * 'a) t)
     -> (string -> string -> string -> 'a -> 'a t)
     -> (string -> string -> string -> 'a -> (bool * 'a) t)
+    -> (string -> string -> string -> 'a -> 'a t)
     -> 'a
     -> string
     -> 'a t

@@ -174,7 +174,8 @@ let rename (old_path: string) (new_path: string): unit t =
 let fold_directory
         (enter: string -> string array -> 'a -> (bool * 'a) t)
         (file:  string -> string -> string -> 'a -> 'a t)
-        (child_dir:   string -> string -> string -> 'a -> (bool * 'a) t)
+        (child_dir1:  string -> string -> string -> 'a -> (bool * 'a) t)
+        (child_dir2:  string -> string -> string -> 'a -> 'a t)
         (start: 'a)
         (dir: string)
     : 'a t
@@ -196,9 +197,10 @@ let fold_directory
                 let* isdir   = is_directory child in
                 let* a =
                     if isdir then
-                        let* down_sub, a = child_dir dir es.(i) child a in
+                        let* down_sub, a = child_dir1 dir es.(i) child a in
                         if down && down_sub then
                             fold a child
+                            >>= child_dir2 dir es.(i) child
                         else
                             return a
                     else

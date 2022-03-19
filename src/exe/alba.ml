@@ -105,6 +105,7 @@ struct
                      fail (Pretty_error.nested_project wdir dir))
             (fun _ _ _  -> return)
             (fun _ _ _  a -> return (true, a))
+            (fun _ _ _  -> return)
             ()
             wdir
 
@@ -125,6 +126,7 @@ struct
                      return (false, a)
                  else
                      return (true, a))
+            (fun _ _ _ -> return)
             []
             wdir_abs
 
@@ -165,24 +167,39 @@ struct
             assert false
 
 
-    let init_action (wdir: string): unit t =
-        let* root = find_root wdir in
-        match root with
-        | None ->
-            let* _ = check_nested_roots wdir in
-            let* path = join_paths [wdir; alba_project_string] in
-            mkdir path 0x755
-        | Some root ->
-            let* rel_root = relative_path root in
-            fail (Pretty_error.already_project wdir rel_root)
-
-
     let compile (wdir: string): int =
         compile_action wdir |> run
 
 
     let init (wdir: string): int =
-        init_action wdir |> run
+        run (
+            let* root = find_root wdir in
+            match root with
+            | None ->
+                let* _ = check_nested_roots wdir in
+                let* path = join_paths [wdir; alba_project_string] in
+                mkdir path 0o755
+            | Some root ->
+                let* rel_root = relative_path root in
+                fail (Pretty_error.already_project wdir rel_root)
+        )
+
+    let clean (wdir: string): int =
+        run (
+            let* root = find_root wdir in
+            match root with
+            | None ->
+                fail (Pretty_error.no_root_found wdir)
+            | Some root ->
+                let* project = resolve_paths [root; alba_project_string] in
+                fold_directory
+                    (fun _ _ _ -> return (true, ()))
+                    (fun _ _ _ -> return)
+                    (fun _ _ _ _ -> return (true, ()))
+                    (fun _ _ child _ -> rmdir child)
+                    ()
+                    project
+        )
 end
 
 
@@ -217,12 +234,17 @@ let _ =
     and init_cmd = Cmd.(
         v (info "init" ~doc:"initialize an alba project") init_term
     )
+    and clean_cmd = Cmd.(
+        v
+            (info "clean" ~doc:"clean up the alba project")
+            Term.(const Alba_program.clean $ wdir_arg)
+    )
     in
     let cmds = Cmd.(
         group
             ~default:compile_term
             (info "alba" ~doc:"The Alba Compiler")
-            [compile_cmd; init_cmd]
+            [compile_cmd; init_cmd; clean_cmd]
     )
     in
     exit Cmd.(eval' cmds)
