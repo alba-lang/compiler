@@ -59,6 +59,10 @@ sig
 
     val map: ('a -> 'b) -> 'a t -> 'b t
 
+    val optional: 'a t -> 'a option t
+
+    val optional_with_default: 'a -> 'a t -> 'a t
+
     val yaml: Yaml.t t
 
     val json_string: string t

@@ -211,6 +211,24 @@ struct
         return (f a)
 
 
+    let optional (m: 'a t): 'a option t =
+        fun y ->
+        match m y with
+        | Ok a ->
+            Ok (Some a)
+        | Error _ ->
+            Ok None
+
+
+    let optional_with_default (a: 'a)  (m: 'a t): 'a t =
+        fun y ->
+        match m y with
+        | Ok a ->
+            Ok a
+        | Error _ ->
+            Ok a
+
+
     let yaml: Yaml.t t =
         fun y -> Ok y
 
