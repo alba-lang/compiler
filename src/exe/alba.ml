@@ -111,7 +111,8 @@ struct
                     (List.map parse_package_yml pkg_dirs)
             in
             let _ = pkgs in
-            assert false
+            Printf.printf "packages parsed\n";
+            return ()
 
 
     let compile (wdir: string): int =

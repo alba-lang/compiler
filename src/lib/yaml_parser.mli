@@ -105,8 +105,8 @@ sig
         val doc: semantic -> doc
     end
 
-    val of_decoder: Final.t Decode.t -> Parser.t
-    (** [of_decoder d]
+    val make: Final.t Decode.t -> Parser.t
+    (** [make d]
 
         Make a yaml parser which parses yaml structures which can be decoded by
         the decoder [d].

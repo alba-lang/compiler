@@ -643,7 +643,7 @@ struct
          * ===============
          *)
 
-        let of_decoder (d: Final.t Decode.t): Parser.t =
+        let make (d: Final.t Decode.t): Parser.t =
             make
                 ()
                 (let* _ = whitespace in decode d)
@@ -713,7 +713,7 @@ let write_errors (source: string) (p: Parser.t): unit =
 
 let test_success (input: string) (d: string Decode.t) (expect: string): bool =
     let open Parser in
-    let p = run_on_string input (of_decoder d) in
+    let p = run_on_string input (make d) in
     if has_succeeded p then
         let json = final p in
         if json = expect then
@@ -735,7 +735,7 @@ let test_success (input: string) (d: string Decode.t) (expect: string): bool =
 
 let test_failed (input: string) (d: string Decode.t) (expect: string): bool =
     let open Parser in
-    let p = run_on_string input (of_decoder d) in
+    let p = run_on_string input (make d) in
     if has_succeeded p then
         let json = final p in
         if json = expect then
