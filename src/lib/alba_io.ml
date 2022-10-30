@@ -258,6 +258,49 @@ end
 
 
 
+(* Experimental Monadic Reading of a File
+ * ======================================
+ *)
+
+
+let input_char (_: in_channel): char t =
+    assert false
+
+let print_char (_: char): unit t =
+    assert false
+
+
+module MRead =
+struct
+    type 'a t0 = 'a t
+
+    type 'a t = in_channel -> 'a t0
+
+    let run (fn: string) (m: 'a t): 'a t0 =
+        let* ic = open_in fn in
+        let  res = m ic in
+        let* _  = close_in fn ic in
+        res
+
+    let input_char: char t =
+        input_char
+
+    let return (a: 'a): 'a t =
+        fun _ -> return a
+
+    let (>>=) (m: 'a t) (f: 'a -> 'b t): 'b t =
+        fun ic ->
+        let* a = m ic in
+        f a ic
+
+    let (let* ) = (>>=)
+
+
+    let _ = run, return, (let* ), input_char, print_char
+end
+
+
+
 (* Parsing Files
  * =============
  *)
