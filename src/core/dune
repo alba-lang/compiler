@@ -1,0 +1,13 @@
+(library
+  (name alba_core)
+  (public_name compiler.core)
+  (libraries fmlib_std)
+  (inline_tests)
+  (preprocess (pps ppx_inline_test))
+)
+
+
+(documentation
+  (package compiler)
+  (mld_files core core_docu)
+)
