@@ -1,2 +1,44 @@
 {0 Core}
 {{!page-core} Up}
+
+
+{1 Building}
+
+{v
+    Endorelation {u: Uni} (A: Any u): Any u
+    :=
+        all (_ _: A): Prop
+v}
+
+{[
+    let* uni   = make_uni in
+    let* u     = make_local "u" uni in
+    let* anyu  = make_anyf u  in
+    let* atp   = make_local "A" anyu in
+    let* _     = make_local "_" atp in
+    let* _     = make_local "_" atp in
+    let* p     = make_prop in
+    let* e     = make_pi 2 p in
+    return (make_global_def "Endorelation" 2 anyu e)
+]}
+
+
+Or like a stack machine:
+
+{v
+    command             gamma                           terms
+    ------------------------------------------------------------
+                        []
+    uni                 []                              Uni: Top
+    push_loc "u"        [u: Uni]
+    loc "u"             [u: Uni]                        u: Uni
+    anyf                [u: Uni]                        Any u: Any (u+1)
+    push_loc "A"        [u: Uni, A: Any u]
+    loc 0               [u: Uni, A: Any u]              A: Any u
+    push_loc "_"        [u: Uni, A: Any u, _: A]
+    loc 1               [u: Uni, A: Any u, _: A]        A: Any u
+    push_loc "_"        [u: Uni, A: Any u, _: A, _: A]
+    push_loc "_"        [u: Uni, A: Any u, _: A, _: A]  Prop: Any 0
+    pi 2                [u: Uni, A: Any u]              A -> A -> Prop: Any u
+    make_def "Endo.."   []
+v}
