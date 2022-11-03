@@ -4,6 +4,12 @@
 module type ANY = Fmlib_std.Interfaces.ANY
 
 
+module type DECIDABLE =
+sig
+    type t
+    val equal: t -> t -> bool
+end
+
 
 module Name =
 struct
@@ -115,3 +121,74 @@ sig
         definition term [t] in the context [0].
     *)
 end
+
+
+
+
+
+
+module Signature (A: DECIDABLE) =
+struct
+    type t =
+        | Const of A.t          (* Global symbols *)
+        | Implicit
+        | Meta of int           (* Unknown *)
+        | App of t * t          (* Function [A -> B] *)
+
+
+    let rec of_list: t list -> t = function
+        | [t] ->
+            t
+        | h :: tl ->
+            App (h, of_list tl)
+        | _ ->
+            assert false (* empty list not allowed *)
+
+    let rec equal( t: t) (u: t): bool =
+        match t, u with
+        | Const a, Const b ->
+            A.(equal a b)
+        | Implicit, Implicit ->
+            true
+        | Meta i, Meta j ->
+            i = j
+        | App (a1, b1), App (a2, b2) ->
+            equal a1 a2 && equal b1 b2
+        | _ ->
+            false
+
+    let rec le (t: t) (u: t): bool =
+        match t, u with
+        | Const a, Const b ->
+            A.(equal a b)
+        | Meta i, Meta j ->
+            i = j
+        | App (Implicit, t), u ->
+            le t u
+        | App (a1, b1), App (a2, b2) ->
+            equal a1 a2 && le b1 b2
+        | _ ->
+            false
+end
+
+
+
+(* Test signature *)
+(*----------------*)
+
+module Sig = Signature (Char)
+
+
+let%test _ =
+    let open Sig in
+    let a = of_list [Const 'a'; Const 'b'] in
+    equal a a
+
+
+let%test _ =
+    let open Sig in
+    let lst = [Const 'a'; App (Const 'b', Const 'c'); Const 'd'] in
+    let a = of_list lst
+    and b = of_list (Implicit :: Implicit :: lst)
+    in
+    not (le a b) && le b a
