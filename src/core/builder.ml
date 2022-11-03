@@ -46,6 +46,26 @@ end
         any0 0
         dec_global 0 "U8" 1
     v}
+
+
+    Challenging example (universes ommitted):
+
+    Given in the global context:
+    {v
+        (+): Nat -> Nat -> Nat
+        (+): String -> String -> String
+        (|>) {A: Any} {P: A -> Any} (a: A) (f: all x: P x): P a
+        :=
+            f a
+    v}
+
+    How to build?
+    {v
+        (1 |> (+)) 2: Nat
+    v}
+    Cannot build [1] and [2] because could be [Nat], [U8], ...
+
+    Can build [|>].
 *)
 module type BUILDER =
 sig
