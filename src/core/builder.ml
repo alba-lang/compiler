@@ -1,4 +1,44 @@
-(** Build wellformed and welltyped environments and terms. *)
+(** Build wellformed and welltyped environments and terms.
+
+    The builder must be able to build the following core declarations and definitions:
+
+
+    {v
+        String: Any
+
+        Char: Any
+
+        (|>) {A: Any} {P: A -> Any} (a: A) (f: all x: P x): P a :=
+            f a
+
+        Predicate (A: Any): Any := A -> Prop
+
+        Predicate: Any -> Any := \ (A: Any): A -> Prop
+
+        Endorelation (A: Any): Any := A -> A -> Prop
+
+        type Nat: Any :=
+            zero: Nat
+            succ: Nat -> Nat
+    v}
+
+
+    {[
+        (* elaborate [String: Any] *)
+        let* h =
+            let* s = sig_meta in
+            let* r = req s in
+            hole r
+        in
+        let* a = any0 in
+        let* any = put_hole a h in
+        let* d   = declare "String" a in
+
+        let* _   = push_seq d any in
+        push_ready any
+    ]}
+
+*)
 
 
 module type ANY = Fmlib_std.Interfaces.ANY
@@ -22,104 +62,197 @@ end
 
 
 (**
-
-    Definition of 'Predicate':
-    {v
-        Predicate: all {u: Uni}: Any u -> Any u
-        :=
-          \ {u} A := A -> A -> Prop
-
-                                0[]
-        uni
-        prop                      0   Uni: Top, Prop: Any 0
-        push "u" 0 0 0            1[u: Uni]
-        any 1 0 0                 1   Any u: Any (u+1)
-        push "A" 1 0 1            2[u: Uni, A: Any u]
-        push "_" 2 0 0            3[u: Uni, A: Any u, _: A]
-        push "_" 3 1 0            4[u: Uni, A: Any u, _: A, _: A]
-        pi 4 2 4 1                2   A -> A -> Prop: Any u
-        lam 2 2 0 0               0   ..., (\ {u} A := A -> A -> Prop)
-                                              : all
-                                                  {u: Uni} (A: Any u)
-        def_global 0 "Predicate" 2
-    v}
-
-
-    Definition of 'U8':
-    {v
-        U8: Any 0
-
-        any0 0
-        dec_global 0 "U8" 1
-    v}
-
-
-    Challenging example (universes ommitted):
-
-    Given in the global context:
-    {v
-        (+): Nat -> Nat -> Nat
-        (+): String -> String -> String
-        (|>) {A: Any} {P: A -> Any} (a: A) (f: all x: P x): P a
-        :=
-            f a
-    v}
-
-    How to build?
-    {v
-        (1 |> (+)) 2: Nat
-    v}
-    Cannot build [1] and [2] because could be [Nat], [U8], ...
-
-    Can build [|>].
 *)
-module type BUILDER =
+module type BUILDER0 =
 sig
+    (** {1 Types} *)
+
+    type uni  (** Universe variable. *)
+
+    type sign (** Signature of a type. *)
+
+
+    type term (** A welltyped term i.e. a term with a context and a type. *)
+
+
+    type req
+        (** Requirement of a hole. It consists of a signature and an optional
+            type or supertype.
+
+            - Optional type: The hole can only be filled with with a term of
+            that type.
+
+            - Optional supertype: The hole can only be filled with a type which
+            is a subtype of the supertype.
+        *)
+
+    type hole
+
+    type task
+
     type _ t
 
-    val prop: unit t
-    (** Add the term [Prop: Any 0] to the context [0].
+    (** {1 Monad} *)
+
+    val return: 'a -> 'a t
+    val ( let* ): 'a t -> ('a -> 'b t) -> 'b t
+    val ( >>=  ): 'a t -> ('a -> 'b t) -> 'b t
+
+
+    (** {1 Signatures} *)
+
+    val sign_unknown: sign t (** Make a signature metavariable *)
+
+    val sign_implicit: sign t
+
+    val sign_sort: sign t
+
+    val sign_function: sign -> sign -> sign t
+    (** [sig_function a r] Make a function signature with the argument
+        signature [a] and the result signature [r].
+
+        Example:
+        {[
+            sig_function [A, B] [C, D, E]
+            -> [[A,B], C, D, E]
+        ]}
+    *)
+
+
+    (** {1 Requirements} *)
+
+    val req: sign -> req t
+
+    val req_type: sign -> term -> req t
+
+    val req_super: sign -> term -> req t
+
+
+
+    (** {1 Metavariables} *)
+
+    val uni: uni t       (** Make a universe metavariable *)
+
+    val hole: req -> hole t (** Make a metavariable with requirement *)
+
+    val hole_sign: sign -> hole t
+
+    val hole_function: sign -> hole -> hole t
+
+    val hole_of_hole: hole -> hole t (** Hole based of a hole used as required
+                                         type *)
+
+    val meta_of_hole: hole -> term t
+
+
+    (** {1 Making terms} *)
+
+    val prop: term t (** Make the term [Prop: Any 0]. *)
+
+    val any0: term t (** Make the term [Any 0: Any 1]. *)
+
+    val any:  uni -> term t (** Make the term [Any u: Any (u+1)]. *)
+
+    val string: string -> term t (** Make the term ["abcd": String]. *)
+
+    val app: hole -> hole -> term t
+
+
+    (** {1 Tasks} *)
+
+
+    val put_into: term -> hole -> task t
+    (** Put a term into a hole
+
+        - Make sure that the term satisfies the requirement. This requires
+        signature and term unification which might be blocking. Therefore it is
+        a task.
+
+        - Put the term into the hole.
 
     *)
 
-    val any0: int t -> unit t
-    (** Add the term [Any i: Any (i+1)] to the context [0]. *)
+    val push_ready: task -> unit t (** Push a task onto the ready queue. *)
+
+    val push_seq: task -> task -> unit t
+    (** [push_seq before t] Make [t] wait for [before]. *)
+
+    val push_seq_list: task list -> unit t
+
+    val push_hole: task -> hole -> unit t (** [push_hole t h] Make [t] wait for hole [h]. *)
+end
 
 
-    val any: int -> int -> unit t
-    (** [any c b t]
 
-        Add the term [Any t] to the context [c] where the universe is the term
-        [u] from the context [c - b].
-    *)
 
-    val push: string -> int -> int -> unit t
-    (** [push name c b t]
 
-        Make a new context based on context [c] with a new bound variable named
-        [name] whose type is the term [t] from the context [c - b].
-    *)
 
-    val pi: int -> int -> int -> int -> unit t
-    (** [pi c n b t]
+module Builder (B0: BUILDER0) =
+struct
+    (* Types *)
+    include B0
 
-        Make a product starting from context [c] using [n] arguments with the
-        result type [(c - b,t)].
-    *)
 
-    val lam: int -> int -> int -> int -> unit t
-    (** [lam c n b t]
+    (* Helper functions *)
+    let unify_hole (_: term) (_: hole): task t =
+        assert false
 
-        Make an abtraction starting from context [c] using [n] arguments with
-        the body term [(c - b, t)].
-    *)
+    let unify_argument_type (f: hole) (atp: hole): task t =
+        let _ = f,atp in
+        assert false
 
-    val def_global: string -> int -> int
-    (** [def_global mod name t]
 
-        Add a global definition to the module [mod] with [name] with the
-        definition term [t] in the context [0].
-    *)
+
+
+
+    (* Term building *)
+
+    let any (h: hole): task t =
+        (* make the term [Any] and put it into the hole [h] *)
+        let* a = any0 in
+        let* u = unify_hole a h in
+        let* p = put_into a h in (* does 'put_into' do the unification? *)
+        let* _ = push_seq u p in
+        return p
+
+
+
+    let app (h: hole) (f: hole -> task) (a: hole -> task): task t =
+        (* holes *)
+        let* fh =
+            (* hole for 'f' *)
+            let* u = sign_unknown in
+            hole_function u h
+        in
+        let* atph =
+            (* hole for the type of 'a' *)
+            let* s = sign_sort in
+            hole_sign s
+        in
+        let* ah =
+            (* hole for 'a' *)
+            hole_of_hole atph
+        in
+        (* tasks *)
+        let  a  = a ah in
+        let* ua = unify_argument_type fh atph in
+        let* fa =
+            let* fa = app fh ah in
+            let* u = unify_hole fa atph in
+            let* p = put_into fa h in
+            let* _ = push_seq u p in
+            return p
+        in
+        let* _ = push_seq_list [a; ua; fa] in
+        let* _ = push_ready a in
+        return (f fh)
+
+
+
+
+    let typed (h: hole) (e: hole -> task) (tp: hole -> task): task t =
+        let _ = h, e, tp in
+        assert false
 end
 
 
