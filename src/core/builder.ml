@@ -43,6 +43,8 @@
 
 module type ANY = Fmlib_std.Interfaces.ANY
 
+module Array = Fmlib_std.Array
+
 
 module type DECIDABLE =
 sig
@@ -59,6 +61,136 @@ struct
 end
 
 
+
+
+
+
+
+
+
+
+module Scheduler =
+struct
+    type task_id    = Task of int
+    type hole_id    = Hole of int
+    type context_id = Context of int
+
+    type environment
+    type context
+
+    let no_task = Task (-1)
+
+    type queue =
+        | ReadyQ
+        | HoleQ of hole_id
+        | TaskQ of task_id
+
+
+
+    type error = Error
+
+    type 'a t =
+        state -> ('a, error) result
+
+    and state = {
+        mutable  nwaiting: int;
+        mutable  env:     environment;
+        mutable  tasks:   task array;
+        mutable  holes:   hole array;
+        mutable  ready:   task_id list;
+        mutable  current: task_id;
+    }
+
+    and task = {
+        parent:  task_id;
+        action: unit t;
+    }
+    and hole = {
+        waiting: task_id;
+    }
+
+
+
+    (* Monad *)
+    let return (_: 'a): 'a t =
+        assert false
+
+    let ( >>= ) (_: 'a t) (_: 'a -> 'b t): 'b t =
+        assert false
+
+    let ( let* ) = (>>=)
+
+
+
+    (* Internal functions *)
+
+    let init (_: environment) (_: unit t): state =
+        assert false
+
+
+    let new_task (action: unit t) (state: state): task_id =
+        let id = Array.length state.tasks in
+        state.tasks <-
+            Array.push
+                {parent = state.current; action}
+                state.tasks;
+        Task id
+
+
+    let queue_task (id: task_id) (where: queue) (state: state): unit =
+        match where with
+        | ReadyQ ->
+            state.ready <-
+                id :: state.ready
+        | HoleQ _ ->
+            assert false
+        | TaskQ _ ->
+            assert false
+
+
+
+
+
+
+
+
+    (* Combinators *)
+    let make_task (action: unit t) (where: queue): task_id t =
+        fun state ->
+        let id = new_task action state in
+        queue_task id where state;
+        Ok id
+
+
+
+
+
+    (* Execute *)
+
+    let run (env: environment) (action: unit t): (environment, error) result =
+        let state = init env action in
+        let rec run state =
+            match state.ready with
+            | [] ->
+                Ok ()
+            | Task i :: ready ->
+                state.ready <- ready;
+                match state.tasks.(i).action state with
+                | Ok () ->
+                    run state
+                | Error _ ->
+                    assert false
+        in
+        match run state with
+        | Ok () ->
+            if state.nwaiting = 0 then
+                Ok state.env
+            else
+                assert false
+        | Error _ ->
+            assert false
+
+end
 
 
 (**
