@@ -1,17 +1,24 @@
 module type ANY = Fmlib_std.Interfaces.ANY
 module Array    = Fmlib_std.Array
 
-module Make =
+module Make
+        (Environment: ANY)
+        (Context: ANY)
+        (Spec: ANY)
+        (Content: ANY)
+        (Error: ANY)
+=
 struct
     type task_id    = Task of int
-    type hole_id
-    type context_id
+    type hole_id    = Hole of int
+    type context_id = Context of int
 
-    type environment
-    type context
-    type spec
+    type environment  = Environment.t
+    type context      = Context.t
+    type spec         = Spec.t
+    type hole_content = Content.t
 
-    let no_task = Task (-1)
+    let no_task    = Task (-1)
 
     type queue =
         | ReadyQ
@@ -21,7 +28,9 @@ struct
 
 
 
-    type error
+    type error =
+        | Blocked
+        | Normal of Error.t
 
     type 'a t =
         state -> ('a, error) result
@@ -46,7 +55,8 @@ struct
     }
     and hole = {
         mutable spec:    spec;
-        mutable n_hole_waiting: task_id list;
+        mutable content: hole_content option;
+        mutable hole_waiting: task_id list;
     }
 
 
@@ -64,10 +74,6 @@ struct
 
     (* Internal functions *)
 
-    let init (_: environment) (_: unit t): state =
-        assert false
-
-
     let new_task (action: unit t) (state: state): task_id =
         let id = Array.length state.tasks in
         state.tasks <-
@@ -81,6 +87,25 @@ struct
                 }
                 state.tasks;
         Task id
+
+
+    let init (env: environment) (context: context) (action: unit t): state =
+        let state =
+            {
+                n_waiting = 0;
+                env;
+                tasks = [||];
+                holes = [||];
+                contexts = [|context|];
+                ready = [];
+                current = no_task;
+                current_context = Context 0;
+            }
+        in
+        let task_id = new_task action state in
+        state.ready <- [task_id];
+        state
+
 
 
     let get_task (Task id: task_id) (state: state): task =
@@ -131,16 +156,24 @@ struct
 
 
 
-    let queue_task (id: task_id) (where: queue) (state: state): unit =
+    let queue_task (where: queue) (id: task_id) (state: state): unit =
+        let incr_n_waiting () =
+            state.n_waiting <- state.n_waiting + 1
+        in
         match where with
         | ReadyQ ->
             state.ready <-
                 id :: state.ready
-        | HoleQ _ ->
-            assert false
-        | TaskQ _ ->
-            assert false
+        | HoleQ (Hole i) ->
+            incr_n_waiting ();
+            let hole = state.holes.(i) in
+            hole.hole_waiting <- id :: hole.hole_waiting
+        | TaskQ (Task i) ->
+            incr_n_waiting ();
+            let task = state.tasks.(i) in
+            task.followers <- id :: task.followers
         | ContextQ _ ->
+            incr_n_waiting ();
             assert false
 
 
@@ -150,25 +183,74 @@ struct
 
 
 
-    (* Combinators *)
+    (* Holes *)
+
+    let make_hole (spec: spec): hole_id t =
+        fun state ->
+        let id = Hole (Array.length state.holes) in
+        state.holes <-
+            Array.push
+                {
+                    spec;
+                    hole_waiting = [];
+                    content = None;
+                }
+                state.holes;
+        Ok id
+
+
+    let get_hole_spec (Hole id: hole_id): spec t =
+        fun state ->
+        Ok state.holes.(id).spec
+
+
+    let set_hole_spec (Hole id: hole_id) (spec: spec): unit t =
+        fun state ->
+        let hole = state.holes.(id) in
+        assert (hole.content = None);
+        hole.spec <- spec;
+        Ok ()
+
+
+
+    let fill_hole (Hole id: hole_id) (content: hole_content): unit t =
+        fun state ->
+        let hole = state.holes.(id) in
+        assert (hole.content = None);
+        hole.content <- Some content;
+        Ok ()
+
+
+
+    (* Tasks *)
+
     let make_task (where: queue) (action: unit t): task_id t =
         fun state ->
         let id = new_task action state in
-        queue_task id where state;
+        queue_task where id state;
         Ok id
 
 
 
 
 
-    (* Execute *)
+    (* Run *)
 
-    let run (env: environment) (action: unit t): (environment, error) result =
-        let state = init env action in
+    let run
+            (env: environment)
+            (context: context)
+            (action: unit t)
+        : (environment, error) result
+        =
+        let state = init env context action in
         let rec run state =
             match state.ready with
             | [] ->
-                Ok ()
+                if state.n_waiting = 0 then
+                    Ok state.env
+                else
+                    (* There are still waiting tasks *)
+                    Error Blocked
             | id :: ready ->
                 state.ready <- ready;
                 (* run task [id] *)
@@ -179,18 +261,9 @@ struct
                 | Ok () ->
                     finish_task task state;
                     run state
-                | Error _ ->
-                    assert false
+                | Error e ->
+                    Error e
         in
-        match run state with
-        | Ok () ->
-            if state.n_waiting = 0 then
-                Ok state.env
-            else
-                (* There are still waiting tasks *)
-                assert false
-        | Error _ ->
-            assert false
-
+        run state
 end
 
