@@ -15,10 +15,12 @@ sig
     type context_id
 
     type queue =
-        | ReadyQ
-        | HoleQ    of hole_id
-        | TaskQ    of task_id
-        | ContextQ of context_id
+        | ReadyQ   (** Ready queue *)
+        | TaskQ of task_id    (** Waiting for the task to finish *)
+        | HoleQ    of hole_id (** Waiting for the hole to be filled *)
+        | ContextQ of context_id (** Waiting for all holes of a context to be
+                                     filled *)
+    (** Identify the queue to insert a task *)
 
 
     type error =
@@ -40,7 +42,7 @@ sig
     (** {1 Holes} *)
 
     val make_hole: Spec.t -> hole_id t
-    (** Make a new hole with a specification. *)
+    (** Make a new hole with a specification in the current context. *)
 
 
     val get_hole_spec: hole_id -> Spec.t t
@@ -64,10 +66,25 @@ sig
 
 
 
+    (** {1 Contexts} *)
+
+    val make_context: Context.t -> context_id t
+    (** Make a new context. *)
+
+    val get_context: Context.t t
+    (** Get the current context. *)
+
+
+
+
+
     (** {1 Tasks} *)
 
     val make_task: queue -> unit t -> task_id t
     (** Make a new task within a queue based on an action. *)
+
+    val current_task: task_id t
+    (** The current task. *)
 
 
 

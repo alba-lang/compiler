@@ -14,7 +14,7 @@ struct
     type context_id = Context of int
 
     type environment  = Environment.t
-    type context      = Context.t
+    type user_context = Context.t
     type spec         = Spec.t
     type hole_content = Content.t
 
@@ -22,8 +22,8 @@ struct
 
     type queue =
         | ReadyQ
-        | HoleQ    of hole_id
         | TaskQ    of task_id
+        | HoleQ    of hole_id
         | ContextQ of context_id
 
 
@@ -54,25 +54,47 @@ struct
         mutable n_pending_subtasks: int;
     }
     and hole = {
+        hole_context: context_id;
         mutable spec:    spec;
         mutable content: hole_content option;
         mutable hole_waiting: task_id list;
     }
+    and context = {
+        context: user_context;
+        mutable n_holes: int;
+        mutable context_waiting: task_id list;
+    }
+
 
 
 
     (* Monad *)
-    let return (_: 'a): 'a t =
-        assert false
+    let return (a: 'a): 'a t =
+        fun _ ->
+        Ok a
 
-    let ( >>= ) (_: 'a t) (_: 'a -> 'b t): 'b t =
-        assert false
+
+    let ( >>= ) (m: 'a t) (f: 'a -> 'b t): 'b t =
+        fun state ->
+        match m state with
+        | Ok a ->
+            f a state
+        | Error e ->
+            Error e
 
     let ( let* ) = (>>=)
 
 
 
     (* Internal functions *)
+
+    let new_context (context: user_context): context =
+        {
+            context;
+            n_holes = 0;
+            context_waiting = [];
+        }
+
 
     let new_task (action: unit t) (state: state): task_id =
         let id = Array.length state.tasks in
@@ -89,14 +111,19 @@ struct
         Task id
 
 
-    let init (env: environment) (context: context) (action: unit t): state =
+    let init
+            (env: environment)
+            (context: user_context)
+            (action: unit t)
+        : state
+        =
         let state =
             {
                 n_waiting = 0;
                 env;
                 tasks = [||];
                 holes = [||];
-                contexts = [|context|];
+                contexts = [|new_context context|];
                 ready = [];
                 current = no_task;
                 current_context = Context 0;
@@ -172,9 +199,10 @@ struct
             incr_n_waiting ();
             let task = state.tasks.(i) in
             task.followers <- id :: task.followers
-        | ContextQ _ ->
+        | ContextQ (Context i) ->
             incr_n_waiting ();
-            assert false
+            let context = state.contexts.(i) in
+            context.context_waiting <- id :: context.context_waiting
 
 
 
@@ -191,6 +219,7 @@ struct
         state.holes <-
             Array.push
                 {
+                    hole_context = state.current_context;
                     spec;
                     hole_waiting = [];
                     content = None;
@@ -218,7 +247,34 @@ struct
         let hole = state.holes.(id) in
         assert (hole.content = None);
         hole.content <- Some content;
+        let Context i = hole.hole_context in
+        let context = state.contexts.(i) in
+        assert (context.n_holes > 0);
+        context.n_holes <- context.n_holes - 1;
+        if context.n_holes = 0 then
+            begin
+                unblock context.context_waiting state;
+                context.context_waiting <- []
+            end;
         Ok ()
+
+
+
+    (* Contexts *)
+
+    let make_context (context: user_context): context_id t =
+        fun state ->
+        let id = Array.length state.contexts in
+        state.contexts <-
+            Array.push (new_context context) state.contexts;
+        Ok (Context id)
+
+
+    let get_context: user_context t =
+        fun state ->
+        let Context i = state.current_context in
+        Ok state.contexts.(i).context
+
 
 
 
@@ -231,6 +287,11 @@ struct
         Ok id
 
 
+    let current_task: task_id t =
+        fun state ->
+        Ok state.current
+
+
 
 
 
@@ -238,7 +299,7 @@ struct
 
     let run
             (env: environment)
-            (context: context)
+            (context: user_context)
             (action: unit t)
         : (environment, error) result
         =
