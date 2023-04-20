@@ -8,6 +8,8 @@ type range = Position.range
 
 type 'a located = range * 'a
 
+type doc = Fmlib_pretty.Print.doc
+
 module type ELABORATOR =
 sig
     type t
@@ -17,7 +19,7 @@ sig
     type formal_argument
 
     val range_of_semantic: error -> range
-    val doc_of_semantic:   error -> Pretty.doc
+    val doc_of_semantic:   error -> doc
 
 
 
@@ -138,21 +140,27 @@ struct
 end
 
 
+
+
+
+
+
+
+
+(* Combinator part of the Token_parser *)
 module Combinator
         (Semantic: ANY)
         (E: ELABORATOR with type error = Semantic.t)
 =
 struct
-    module Err = Error (Semantic) (E)
+    module Error = Error (Semantic) (E)
 
     module Basic   =
-        Token_parser.Make (E) (Token) (Unit) (Err)
+        Token_parser.Make (E) (Token) (Unit) (Error)
 
     include Basic
 
 
-
-    type 'a tl = (range * 'a) t
 
 
 
@@ -275,8 +283,8 @@ struct
         fun _ -> a
 
 
-    let add_range (a: 'a located): 'a located tl =
-        return (fst a, a)
+    (*let add_range (a: 'a located): 'a located tl =
+        return (fst a, a)*)
 
     let around
             (lpar: Position.t t)
@@ -301,7 +309,7 @@ struct
             f
             p
 
-    let brackets_around
+    (*let brackets_around
             (f: Position.t -> Position.t -> 'a -> 'b)
             (p: unit -> 'a t)
         : 'b t
@@ -310,7 +318,7 @@ struct
             (bracket_left  select_start)
             (bracket_right select_end)
             f
-            p
+            p*)
 
     let braces_around
             (f: Position.t -> Position.t -> 'a -> 'b)
@@ -358,7 +366,7 @@ struct
         | Ok elab ->
             set elab
         | Error e ->
-            fail (Err.Elab e)
+            fail (Error.Elab e)
 
 
 
@@ -564,7 +572,7 @@ struct
                  | Right ->
                      return false
                  | _ ->
-                     fail (Err.Parse (range, op1, op2))
+                     fail (Error.Parse (range, op1, op2))
             )
             (fun (range, str, prec) t ->
                  return (E.unary_expression range str prec t)
@@ -702,6 +710,14 @@ struct
 end
 
 
+
+
+
+
+
+
+
+(* Parser part of the Token_parser *)
 module Make
         (Semantic: ANY)
         (E: ELABORATOR with type error = Semantic.t)
