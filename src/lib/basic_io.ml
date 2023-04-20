@@ -188,15 +188,14 @@ struct
     let from (ch: in_channel) (sink: Sink.t): (Sink.t, string) t =
         fun () ->
         try
-            let str = Stream.of_channel ch
-            and sinkr = ref sink
+            let sinkr = ref sink
             in
             try
                 while Sink.needs_more !sinkr do
-                    sinkr := Sink.put (Stream.next str) !sinkr;
+                    sinkr := Sink.put (Stdlib.input_char ch) !sinkr;
                 done;
                 Ok !sinkr
-            with Stream.Failure ->
+            with End_of_file ->
                 Ok (Sink.put_end !sinkr)
         with Sys_error str ->
             Error str
