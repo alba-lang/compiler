@@ -59,14 +59,14 @@ module Elaborator = struct
         ()
 end
 
-module TP = Parser.Make (Void) (Elaborator)
+module TP = Definition_parser.Make (Void) (Elaborator)
 
 module PL =
     Parse_with_lexer.Make
         (Unit)
         (Token)
         (Elaborator)
-        (Parser.Error (Void) (Elaborator))
+        (Definition_parser.Error (Void) (Elaborator))
         (Lexer)
         (TP)
 
