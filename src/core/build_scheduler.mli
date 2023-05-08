@@ -8,26 +8,6 @@ module Make
         (Error: ANY):
 sig
 
-    (** {1 Types} *)
-
-    type task_id
-    type hole_id
-    type context_id
-
-    type queue =
-        | ReadyQ   (** Ready queue *)
-        | TaskQ of task_id    (** Waiting for the task to finish *)
-        | HoleQ    of hole_id (** Waiting for the hole to be filled *)
-        | ContextQ of context_id (** Waiting for all holes of a context to be
-                                     filled *)
-    (** Identify the queue to insert a task *)
-
-
-    type error =
-        | Blocked
-        | Normal of Error.t
-
-
     (** {1 Monad} *)
 
 
@@ -40,6 +20,8 @@ sig
 
 
     (** {1 Holes} *)
+
+    type hole_id
 
     val make_hole: Spec.t -> hole_id t
     (** Make a new hole with a specification in the current context. *)
@@ -68,6 +50,8 @@ sig
 
     (** {1 Contexts} *)
 
+    type context_id
+
     val make_context: Context.t -> context_id t
     (** Make a new context. *)
 
@@ -80,6 +64,16 @@ sig
 
     (** {1 Tasks} *)
 
+    type task_id
+
+    type queue =
+        | ReadyQ              (** Ready queue *)
+        | TaskQ of task_id    (** Waiting for the task to finish *)
+        | HoleQ    of hole_id (** Waiting for the hole to be filled *)
+        | ContextQ of context_id (** Waiting for all holes of a context to be
+                                     filled *)
+    (** Identify the queue to insert a task *)
+
     val make_task: queue -> unit t -> task_id t
     (** Make a new task within a queue based on an action. *)
 
@@ -91,10 +85,15 @@ sig
 
     (** {1 Run} *)
 
+    type error =
+        | Blocked
+        | Normal of Error.t
+
     val run:
         Environment.t
         -> Context.t
         -> unit t ->
         (Environment.t, error) result
-    (** Run an action within an environment. *)
+        (** [run env ctxt action] Run [action] in the environment [env] and
+            context [ctxt]. *)
 end

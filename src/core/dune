@@ -1,7 +1,7 @@
 (library
   (name alba_core)
   (public_name compiler.core)
-  (libraries fmlib_std)
+  (libraries fmlib_std fmlib_parse fmlib_pretty alba_parse)
   (inline_tests)
   (preprocess (pps ppx_inline_test))
 )
