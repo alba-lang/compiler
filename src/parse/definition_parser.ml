@@ -71,6 +71,22 @@ sig
         -> term option
         -> formal_argument
 
+
+    val product_expression:
+        Position.t
+        -> formal_argument list
+        -> term (* result type *)
+        -> term
+
+
+    val lambda_expression:
+        Position.t
+        -> formal_argument list
+        -> term option          (* result type *)
+        -> term                 (* body *)
+        -> term
+
+
     val add_definition:
             Name.t located
             -> formal_argument list
@@ -605,13 +621,17 @@ struct
 
 
     and lambda_abstraction (): E.term t =
-        let* _ = lambda select_start in
-        assert false
+        let* pos = lambda select_start in
+        let* fargs = formal_arguments () in
+        let* res = result_type () |> optional in
+        let* body = function_body () in
+        return (E.lambda_expression pos fargs res body)
 
 
     and pi_term (): E.term t =
-        let* _ = kw_all select_start in
-        assert false
+        let* pos = kw_all select_start in
+        let* fargs, res = signature () in
+        return (E.product_expression pos fargs res)
 
 
     and type_term (): E.term t =
@@ -622,17 +642,17 @@ struct
 
 
 
-    let result_type (): E.term t =
+    and result_type (): E.term t =
         let* _ = colon unit2 <?> {|": <result type>"|} in
         term () <?> "type"
 
 
-    let function_body (): E.term t =
+    and function_body (): E.term t =
         let* _ = assign unit2 <?> {|":= <function body>"|} in
         term () <?> "function body" |> indent 1
 
 
-    let formal_argument_inner
+    and formal_argument_inner ()
             (f: Name.t located list -> E.term option -> 'a)
             ()
         : 'a t
@@ -642,25 +662,26 @@ struct
         return (f names tp)
 
 
-    let formal_argument (): E.formal_argument t =
+    and formal_argument (): E.formal_argument t =
         get_name E.formal_argument_simple
         </>
         (
-            formal_argument_inner (E.formal_argument false)
+            formal_argument_inner () (E.formal_argument false)
             |> parens_around (fun _ _ farg -> farg)
         )
         </>
         (
-            formal_argument_inner (E.formal_argument true)
+            formal_argument_inner () (E.formal_argument true)
             |> braces_around (fun _ _ farg -> farg)
         )
 
 
+    and formal_arguments (): E.formal_argument list t =
+        formal_argument () <?> "formal argument" |> many0
 
 
-    let signature: (E.formal_argument list * E.term) t =
-        let* fargs =
-            formal_argument () <?> "formal argument" |> many0
+    and signature () : (E.formal_argument list * E.term) t =
+        let* fargs = formal_arguments ()
         in
         let* rtp = result_type ()
         in
@@ -676,7 +697,7 @@ struct
     let top_definition (): unit t =
         let* name = get_name (fun range name -> range, name) in
         let* fargs, rtp =
-            signature
+            signature ()
             <?> "type signature i.e. zero or more formal arguments and a
                 return type"
             |> indent 1

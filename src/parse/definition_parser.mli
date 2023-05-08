@@ -70,6 +70,21 @@ sig
         -> term option
         -> formal_argument
 
+
+    val product_expression:
+        Position.t
+        -> formal_argument list
+        -> term (* result type *)
+        -> term
+
+
+    val lambda_expression:
+        Position.t
+        -> formal_argument list
+        -> term option          (* result type *)
+        -> term                 (* body *)
+        -> term
+
     val add_definition:
             Name.t located
             -> formal_argument list

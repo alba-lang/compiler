@@ -52,6 +52,9 @@ module Elaborator = struct
     let formal_argument _ _ _: formal_argument =
         ()
 
+    let product_expression _ _ _: term = ()
+    let lambda_expression  _ _ _ _: term = ()
+
     let add_definition _ _ _ _ _: (t, error) result =
         Ok ()
 
@@ -135,6 +138,10 @@ let success_tests: string array =
         "f: T := (1,2,3,4)";
 
         "f: T := ((((x))))";
+
+        {|f: all (x: A): R := \ x := e x|};
+
+        {|Predicate: Any -> Any := \ A := A -> Prop|}
     |]
 
 
