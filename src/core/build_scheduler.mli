@@ -1,7 +1,6 @@
 module type ANY = Fmlib_std.Interfaces.ANY
 
 module Make
-        (Environment: ANY)
         (Context: ANY)
         (Spec: ANY)
         (Content: ANY)
@@ -14,6 +13,7 @@ sig
     type _ t
 
     val return: 'a -> 'a t
+    val fail:   Error.t -> 'a t
     val ( let* ): 'a t -> ('a -> 'b t) -> 'b t
     val ( >>=  ): 'a t -> ('a -> 'b t) -> 'b t
 
@@ -89,11 +89,12 @@ sig
         | Blocked
         | Normal of Error.t
 
+
     val run:
-        Environment.t
-        -> Context.t
-        -> unit t ->
-        (Environment.t, error) result
-        (** [run env ctxt action] Run [action] in the environment [env] and
-            context [ctxt]. *)
+        Context.t
+        -> unit t
+        -> (Context.t, error) result
+        (** [run ctxt action] Run [action] in the context [ctxt]
+
+         *)
 end

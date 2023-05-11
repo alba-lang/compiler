@@ -21,7 +21,6 @@ module type ANY = Fmlib_std.Interfaces.ANY
 module Array    = Fmlib_std.Array
 
 module Make
-        (Environment: ANY)
         (Context: ANY)
         (Spec: ANY)
         (Content: ANY)
@@ -32,7 +31,6 @@ struct
     type hole_id    = Hole of int
     type context_id = Context of int
 
-    type environment  = Environment.t
     type user_context = Context.t
     type spec         = Spec.t
     type hole_content = Content.t
@@ -56,7 +54,6 @@ struct
 
     and state = {
         mutable  n_waiting: int;
-        mutable  env:     environment;
         mutable  tasks:   task array;
         mutable  holes:   hole array;
         mutable  contexts: context array;
@@ -91,6 +88,11 @@ struct
     let return (a: 'a): 'a t =
         fun _ ->
         Ok a
+
+
+    let fail (e: Error.t): 'a t =
+        fun _ ->
+        Error (Normal e)
 
 
     let ( >>= ) (m: 'a t) (f: 'a -> 'b t): 'b t =
@@ -131,7 +133,6 @@ struct
 
 
     let init
-            (env: environment)
             (context: user_context)
             (action: unit t)
         : state
@@ -143,7 +144,6 @@ struct
         let state =
             {
                 n_waiting = 0;
-                env;
                 tasks    = [||];
                 holes    = [||];
                 contexts = [| new_context context |];
@@ -321,17 +321,16 @@ struct
     (* Run *)
 
     let run
-            (env: environment)
             (context: user_context)
             (action: unit t)
-        : (environment, error) result
+        : (user_context, error) result
         =
-        let state = init env context action in
+        let state = init context action in
         let rec run state =
             match state.ready with
             | [] ->
                 if state.n_waiting = 0 then
-                    Ok state.env
+                    Ok state.contexts.(0).context
                 else
                     (* There are still waiting tasks *)
                     Error Blocked
