@@ -15,10 +15,11 @@ end
 
 
 
-(*
-module Context =
+module Elaboration_context =
 struct
-    type t
+    type t = unit
+    let init (_: string) (_: string): t =
+        ()
 end
 
 
@@ -26,8 +27,7 @@ end
 (* Specification of a hole *)
 module Spec =
 struct
-    type t =
-        | Type      (* Term appears in a type position *)
+    type t
 end
 
 
@@ -41,17 +41,11 @@ end
 
 
 
-module Error =
-struct
-    type t
-end
-
-
 module Scheduler =
-    Build_scheduler.Make (Environment) (Context) (Spec) (Content) (Error)
-*)
+    Build_scheduler.Make (Elaboration_context) (Spec) (Content) (Semantic)
 
-type t = Environment.t
+
+type t = Elaboration_context.t
 
 type term
 type universe_term
@@ -187,9 +181,8 @@ let add_definition
     assert false
 
 
+
+
+
 let init (pname: string) (mname: string): t =
-    Environment.init pname mname
-
-
-let environment (e: t): Environment.t =
-    e
+    Elaboration_context.init pname mname

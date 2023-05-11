@@ -10,5 +10,3 @@ include Alba_parse.Definition_parser.ELABORATOR
 
 
 val init: string -> string -> t
-
-val environment: t -> Environment.t
