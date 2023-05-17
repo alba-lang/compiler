@@ -1,29 +1,65 @@
-module type ANY = Fmlib_std.Interfaces.ANY
+open Alba_parse
+
+
 
 module Binder_info =
-    struct
-        type t = {
-            name: string;
-            implicit: bool;
-            ghost: bool;
-            with_type: bool;
-        }
-    end
+struct
+    type t = {
+        name: Name.t;
+        implicit: bool;
+        with_type: bool;        (* Explicitly typed *)
+        arrow: bool;            (* Only for products (A -> B) *)
+    }
+
+    let make name implicit with_type = {
+        name;
+        implicit;
+        with_type;
+        arrow = false;
+    }
+end
 
 
 
-module Make (V: ANY) =
+module Argument_info =
+struct
+    type t = {
+        implicit: bool;
+    }
+end
+
+
+module Application_info =
 struct
     type t =
-        | Zero         (* Lowest predicative universe *)
-        | Succ of t    (* Next predicative universe *)
-        | Prop
-        | Any of t
-        | Local of int (* De Bruijn index *)
-        | Meta  of int (* De Bruijn level *)
-        | Pi of  binder array * t
-        | Lam of binder array * t
-        | Value of V.t
-
-    and binder = Binder_info.t * t
+        | Normal
+        | Unary
+        | Binary
 end
+
+
+
+
+
+
+type t =
+    | Prop
+    | Any of int            (* 0 or 1 *)
+    | Local  of int         (* De Bruijn index *)
+    | Global of int * int   (* Module, id in module *)
+    | Meta  of int * int    (* Context, id in context *)
+    | Pi of  binder array * t
+    | Lam of binder array * t
+    | Application of Application_info.t * t * argument array
+
+and binder   = Binder_info.t   * t
+
+and argument = Argument_info.t * t
+
+
+
+let prop: t = Prop
+
+let any0: t = Any 0
+
+let any1: t = Any 1

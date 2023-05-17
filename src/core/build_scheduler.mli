@@ -19,6 +19,24 @@ sig
 
 
 
+
+    (** {1 Run} *)
+
+    type error =
+        | Blocked
+        | Normal of Error.t
+
+
+    val run:
+        Context.t
+        -> unit t
+        -> (Context.t, error) result
+        (** [run ctxt action] Run [action] in the context [ctxt]
+
+         *)
+
+
+
     (** {1 Holes} *)
 
     type hole_id
@@ -79,22 +97,4 @@ sig
 
     val current_task: task_id t
     (** The current task. *)
-
-
-
-
-    (** {1 Run} *)
-
-    type error =
-        | Blocked
-        | Normal of Error.t
-
-
-    val run:
-        Context.t
-        -> unit t
-        -> (Context.t, error) result
-        (** [run ctxt action] Run [action] in the context [ctxt]
-
-         *)
 end

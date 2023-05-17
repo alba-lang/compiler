@@ -36,6 +36,9 @@ end
 module Content =
 struct
     type t
+
+    let make (_: Term.t) (_: Term.t): t =
+        assert false
 end
 
 
@@ -45,12 +48,39 @@ module Scheduler =
     Build_scheduler.Make (Elaboration_context) (Spec) (Content) (Semantic)
 
 
+type hole_id = Scheduler.hole_id
+
+type action = unit Scheduler.t
+
+
 type t = Elaboration_context.t
 
-type term
+type term = hole_id -> action
+
 type universe_term
+
 type formal_argument
+
 type error = Semantic.t
+
+
+
+
+(* Check Specification
+   ================================================================================
+ *)
+
+
+let check (_: Content.t) (_: hole_id): action =
+    assert false
+
+
+
+
+
+(* Functions to satisfy the signature ELABORATOR
+   ================================================================================
+ *)
 
 let range_of_semantic (_: error): Position.range =
     assert false
@@ -68,16 +98,47 @@ module Universe = struct
 end
 
 
-let prop (_: range): term =
-    assert false
-
-
 let level (_: range): term =
     assert false
 
 
+
+
+
+let prop (_: range): term =
+    fun hole ->
+    (*
+        The term is [Prop: Any 0].
+        The following tasks have to be executed in sequence:
+        - Unify [Any 0] with the requirement
+        - Put [Prop: Any 0] into [hole]
+
+     *)
+    let t = Content.make Term.prop Term.any0
+    in
+    Scheduler.(
+        let* id = check t hole     |> make_task ReadyQ in
+        let* _  = fill_hole hole t |> make_task (TaskQ id) in
+        return ()
+    )
+
+
+
+
+
+
 let any (_: range) (_: universe_term option): term =
-    assert false
+    fun hole ->
+    let t = Content.make Term.any0 Term.any1
+    in
+    Scheduler.(
+        let* id = check t hole     |> make_task ReadyQ in
+        let* _  = fill_hole hole t |> make_task (TaskQ id) in
+        return ()
+    )
+
+
+
 
 
 let name_term (_: range) (_: Name.t): term =

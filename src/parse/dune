@@ -1,6 +1,6 @@
 (library
   (name alba_parse)
-  (public_name compiler.parse)
+  (public_name compiler.alba_parse)
   (libraries fmlib_std fmlib_parse)
   (inline_tests)
   (preprocess (pps ppx_inline_test))
