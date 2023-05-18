@@ -37,7 +37,7 @@ module Content =
 struct
     type t
 
-    let make (_: Term.t) (_: Term.t): t =
+    let make (_: unit -> range) (_: Term.t) (_: Term.t): t =
         assert false
 end
 
@@ -55,13 +55,39 @@ type action = unit Scheduler.t
 
 type t = Elaboration_context.t
 
-type term = hole_id -> action
+type term = {
+    rangef: unit -> range;
+    build:  hole_id -> action
+}
+
 
 type universe_term
 
 type formal_argument
 
 type error = Semantic.t
+
+
+
+
+
+(* Helper Functions
+   ================================================================================
+ *)
+
+
+let list_last (lst: 'a list): 'a =
+    assert (lst <> []);
+    let rec last = function
+        | [] ->
+            assert false
+        | [a] ->
+            a
+        | _ :: tail ->
+            last tail
+    in
+    last lst
+
 
 
 
@@ -105,8 +131,7 @@ let level (_: range): term =
 
 
 
-let prop (_: range): term =
-    fun hole ->
+let prop (range: range): term =
     (*
         The term is [Prop: Any 0].
         The following tasks have to be executed in sequence:
@@ -114,28 +139,37 @@ let prop (_: range): term =
         - Put [Prop: Any 0] into [hole]
 
      *)
-    let t = Content.make Term.prop Term.any0
+    let rangef () = range
     in
-    Scheduler.(
-        let* id = check t hole     |> make_task ReadyQ in
-        let* _  = fill_hole hole t |> make_task (TaskQ id) in
-        return ()
-    )
-
-
-
-
-
-
-let any (_: range) (_: universe_term option): term =
-    fun hole ->
-    let t = Content.make Term.any0 Term.any1
+    let t = Content.make rangef Term.prop Term.any0
     in
-    Scheduler.(
-        let* id = check t hole     |> make_task ReadyQ in
-        let* _  = fill_hole hole t |> make_task (TaskQ id) in
-        return ()
-    )
+    let build hole =
+        Scheduler.(
+            let* id = check t hole     |> make_task ReadyQ in
+            let* _  = fill_hole hole t |> make_task (TaskQ id) in
+            return ()
+        )
+    in
+    { rangef; build }
+
+
+
+
+
+
+let any (range: range) (_: universe_term option): term =
+    let rangef () = range
+    in
+    let t = Content.make (fun () -> range) Term.any0 Term.any1
+    in
+    let build hole =
+        Scheduler.(
+            let* id = check t hole     |> make_task ReadyQ in
+            let* _  = fill_hole hole t |> make_task (TaskQ id) in
+            return ()
+        )
+    in
+    { rangef; build }
 
 
 
@@ -153,24 +187,37 @@ let char_term (_: range) (_: string): term =
     assert false
 
 
+
 let decimal_term (_: range) (_: string): term =
     assert false
+
 
 
 let float_term (_: range) (_: string): term =
     assert false
 
 
+
 let tuple_term (_: range) (_: term list): term =
     assert false
+
 
 
 let list_term (_: range) (_: term list): term =
     assert false
 
 
-let application (_: term) (_: term list): term =
-    assert false
+
+let application (fterm: term) (args: term list): term =
+    assert (args <> []);
+    let rangef () =
+        fterm.rangef () |> fst,
+        (list_last args).rangef () |> snd
+    in
+    let build _ =
+        assert false
+    in
+    { rangef; build }
 
 
 let parens_term (_: Position.t) (_: Position.t) (_: term): term =
@@ -182,21 +229,34 @@ let implicit_argument (_: Position.t) (_: Position.t) (_: term): term =
 
 
 let unary_expression
-        (_: range) (_: string) (_: Precedence.t) (_: term)
+        ((pos1, _): range) (_: string) (_: Precedence.t) (operand: term)
     : term
     =
-    assert false
+    let rangef () = pos1, operand.rangef () |> snd
+    in
+    let build _ =
+        assert false
+    in
+    { rangef; build }
 
 
 let binary_expression
-        (_: term) (_: range) (_: string) (_: Precedence.t) (_: term)
+        (leftop: term) (_: range) (_: string) (_: Precedence.t) (rightop: term)
     : term
     =
-    assert false
+    let rangef () = leftop.rangef () |> fst, rightop.rangef () |> snd
+    in
+    let build _ =
+        assert false
+    in
+    { rangef; build }
+
+
 
 
 let formal_argument_simple (_: range) (_: Name.t): formal_argument =
     assert false
+
 
 
 let formal_argument
@@ -209,6 +269,7 @@ let formal_argument
 
 
 
+
 let product_expression
         (_: Position.t)                 (* start of 'all' *)
         (_: formal_argument list)
@@ -216,6 +277,7 @@ let product_expression
     : term
     =
     assert false
+
 
 
 
