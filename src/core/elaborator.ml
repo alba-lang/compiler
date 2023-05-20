@@ -57,8 +57,17 @@ type t = Elaboration_context.t
 
 type term = {
     rangef: unit -> range;
-    build:  hole_id -> action
+    build:  hole_id -> action;
+    is_implicit: bool;
 }
+
+
+
+let make_term rangef build: term = {
+    rangef; build; is_implicit = false
+}
+
+
 
 
 type universe_term
@@ -124,6 +133,9 @@ module Universe = struct
 end
 
 
+
+
+
 let level (_: range): term =
     assert false
 
@@ -150,7 +162,7 @@ let prop (range: range): term =
             return ()
         )
     in
-    { rangef; build }
+    make_term rangef build
 
 
 
@@ -160,7 +172,7 @@ let prop (range: range): term =
 let any (range: range) (_: universe_term option): term =
     let rangef () = range
     in
-    let t = Content.make (fun () -> range) Term.any0 Term.any1
+    let t = Content.make rangef Term.any0 Term.any1
     in
     let build hole =
         Scheduler.(
@@ -169,7 +181,7 @@ let any (range: range) (_: universe_term option): term =
             return ()
         )
     in
-    { rangef; build }
+    make_term rangef build
 
 
 
@@ -208,6 +220,33 @@ let list_term (_: range) (_: term list): term =
 
 
 
+(* Note [Function Application]
+
+   The goal is to elaborate the function applicaition
+
+       f a1 a2 ... an
+
+   into a hole with some requirement [R].
+
+   Requirements for the holes for [f], [a1], ... , [an]:
+
+        f:  U1 -> U2 -> ... -> Un -> R
+        a1: U1
+        a2: U2
+        ...
+        an: Un
+
+   The function term and the arguments can be elaborated in parallel, preferred
+   order is first the function term and then the arguments.
+
+   The successful elaboration of an argument before the successful elaboration
+   of the function term updates the requirement for the function term and vice
+   versa.
+
+
+*)
+
+
 let application (fterm: term) (args: term list): term =
     assert (args <> []);
     let rangef () =
@@ -217,15 +256,24 @@ let application (fterm: term) (args: term list): term =
     let build _ =
         assert false
     in
-    { rangef; build }
+    make_term rangef build
 
 
-let parens_term (_: Position.t) (_: Position.t) (_: term): term =
-    assert false
 
 
-let implicit_argument (_: Position.t) (_: Position.t) (_: term): term =
-    assert false
+let parens_term (pos1: Position.t) (pos2: Position.t) (term: term): term =
+    { term with
+      rangef      = (fun () -> pos1, pos2);
+    }
+
+
+
+let implicit_argument (pos1: Position.t) (pos2: Position.t) (term: term): term =
+    { term with
+      rangef      = (fun () -> pos1, pos2);
+      is_implicit = true;
+    }
+
 
 
 let unary_expression
@@ -237,7 +285,9 @@ let unary_expression
     let build _ =
         assert false
     in
-    { rangef; build }
+    make_term rangef build
+
+
 
 
 let binary_expression
@@ -249,7 +299,7 @@ let binary_expression
     let build _ =
         assert false
     in
-    { rangef; build }
+    make_term rangef build
 
 
 
