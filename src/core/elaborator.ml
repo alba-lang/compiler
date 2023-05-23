@@ -101,12 +101,23 @@ let list_last (lst: 'a list): 'a =
 
 
 
+let make_type_holes (_: int): hole_id array Scheduler.t =
+    assert false
+
+
+let make_arg_holes (_: hole_id array): hole_id array Scheduler.t =
+    assert false
+
+
+
+
 (* Check Specification
    ================================================================================
  *)
 
 
 let check (_: Content.t) (_: hole_id): action =
+    (* Verify that the content satisfies the specification of the hole. *)
     assert false
 
 
@@ -220,59 +231,35 @@ let list_term (_: range) (_: term list): term =
 
 
 
-(* Note [Function Application]
-
-   The goal is to elaborate the function applicaition
-
-       f a1 a2 ... an
-
-   into a hole with some requirement [R].
-
-   Requirements for the holes for [f], [a1], ... , [an]:
-
-        f:  U1 -> U2 -> ... -> Un -> R
-        a1: U1
-        a2: U2
-        ...
-        an: Un
-
-   The function term and the arguments can be elaborated in parallel, preferred
-   order is first the function term and then the arguments.
-
-   The successful elaboration of an argument before the successful elaboration
-   of the function term updates the requirement for the function term and vice
-   versa.
-
-
-*)
-
-
 let application (fterm: term) (args: term list): term =
+    (* Note [Function Application] *)
     assert (args <> []);
     let rangef () =
         fterm.rangef () |> fst,
         (list_last args).rangef () |> snd
     in
     let build _ =
-        assert false
+        let args  = Array.of_list args in
+        let nargs = Array.length args  in
+        Scheduler.(
+            let* type_holes = make_type_holes nargs in
+            let* arg_holes  = make_arg_holes type_holes in
+            let _ = arg_holes in
+            assert false
+        )
     in
     make_term rangef build
 
 
 
 
-let parens_term (pos1: Position.t) (pos2: Position.t) (term: term): term =
-    { term with
-      rangef      = (fun () -> pos1, pos2);
-    }
+let parens_term (_: Position.t) (_: Position.t) (term: term): term =
+    term
 
 
 
-let implicit_argument (pos1: Position.t) (pos2: Position.t) (term: term): term =
-    { term with
-      rangef      = (fun () -> pos1, pos2);
-      is_implicit = true;
-    }
+let implicit_argument (_: Position.t) (_: Position.t) (term: term): term =
+    { term with is_implicit = true }
 
 
 
@@ -359,3 +346,38 @@ let add_definition
 
 let init (pname: string) (mname: string): t =
     Elaboration_context.init pname mname
+
+
+
+
+
+
+(* Note [Function Application]
+
+   The goal is to elaborate the function applicaition
+
+       f a1 a2 ... an
+
+   into a hole with some requirement [R].
+
+   We need one hole for the function term [f] and two holes [ai] [Ai] for each
+   argument (one for the argument term and one for its type)
+
+        a1: A1: Sort
+        ...
+        an: An: Sort
+
+        f: function with n arguments (some of them potentially implicit) with
+           the corresponding types Ai + the arguments in R.
+
+   One task for the elaboration of the function term and one task the
+   elaboration of each argument term. All tasks are put into the ready queue.
+
+   The elaboration task Ef for f puts f into the hole, if the signature
+   requirements are satisfied. This is not yet unification.
+
+   One task for the elaboration of f a1 ... an: Starts after f has been
+   elaborated. It unifies the argument types of f with all Ai and the result
+   type of f with R and then puts f a1 ... an into the hole.
+
+*)
