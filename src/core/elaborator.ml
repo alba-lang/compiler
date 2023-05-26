@@ -67,11 +67,42 @@ let list_last (lst: 'a list): 'a =
 
 
 
-let make_type_holes (_: int): hole_id array BS.t =
+let make_application_holes
+        (_: term)
+        (_: term array)
+    : (hole_id * hole_id array) BS.t
+    =
     assert false
 
 
-let make_arg_holes (_: hole_id array): hole_id array BS.t =
+
+let build_task
+        (queue: BS.queue)
+        (hole: hole_id)
+        (f: hole_id -> action)
+    : BS.task_id BS.t
+    =
+    BS.make_task queue (f hole)
+
+
+
+let build_task_wo_id
+        (queue: BS.queue)
+        (hole: hole_id)
+        (f: hole_id -> action)
+    : unit BS.t
+    =
+    BS.(map (fun _ -> ()) (make_task queue (f hole)))
+
+
+
+let build_application
+        (_: hole_id)            (* f *)
+        (_: hole_id array)      (* a1 .. an *)
+        (_: hole_id)            (* f a1 .. an *)
+    : unit BS.t
+    =
+    (* Hole for [f] must be filled *)
     assert false
 
 
@@ -204,14 +235,32 @@ let application (fterm: term) (args: term list): term =
         fterm.rangef () |> fst,
         (list_last args).rangef () |> snd
     in
-    let build _ =
+    let build hole =
         let args  = Array.of_list args in
-        let nargs = Array.length args  in
         BS.(
-            let* type_holes = make_type_holes nargs in
-            let* arg_holes  = make_arg_holes type_holes in
-            let _ = arg_holes in
-            assert false
+            let* fhole, argholes =
+                (* Make holes *)
+                make_application_holes fterm args
+            in
+            let* _ =
+                (* Put argument elaborators into the ready queue *)
+                int_fold_right
+                    (Array.length args)
+                    (fun i () ->
+                         build_task_wo_id
+                             ReadyQ
+                             argholes.(i)
+                             args.(i).build)
+                    (return ())
+            in
+            let* fid =
+                (* Put function term elaborator into the ready queue *)
+                build_task ReadyQ fhole fterm.build
+            in
+            (* Elaborate the hole application after the elaboration of the
+             * function term.
+             *)
+            build_task_wo_id (TaskQ fid) hole (build_application fhole argholes)
         )
     in
     make_term rangef build
