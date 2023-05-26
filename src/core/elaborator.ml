@@ -8,52 +8,18 @@ type 'a located = range * 'a
 
 
 
-module Semantic =
-struct
-    type t
-end
 
 
 
-module Elaboration_context =
-struct
-    type t = unit
-    let init (_: string) (_: string): t =
-        ()
-end
+module BS = Build_scheduler
 
 
+type hole_id = BS.hole_id
 
-(* Specification of a hole *)
-module Spec =
-struct
-    type t
-end
+type action = unit BS.t
 
 
-
-(* Content of a hole *)
-module Content =
-struct
-    type t
-
-    let make (_: unit -> range) (_: Term.t) (_: Term.t): t =
-        assert false
-end
-
-
-
-
-module Scheduler =
-    Build_scheduler.Make (Elaboration_context) (Spec) (Content) (Semantic)
-
-
-type hole_id = Scheduler.hole_id
-
-type action = unit Scheduler.t
-
-
-type t = Elaboration_context.t
+type t = Context.t
 
 type term = {
     rangef: unit -> range;
@@ -74,7 +40,7 @@ type universe_term
 
 type formal_argument
 
-type error = Semantic.t
+type error = Error.t
 
 
 
@@ -101,11 +67,11 @@ let list_last (lst: 'a list): 'a =
 
 
 
-let make_type_holes (_: int): hole_id array Scheduler.t =
+let make_type_holes (_: int): hole_id array BS.t =
     assert false
 
 
-let make_arg_holes (_: hole_id array): hole_id array Scheduler.t =
+let make_arg_holes (_: hole_id array): hole_id array BS.t =
     assert false
 
 
@@ -116,7 +82,7 @@ let make_arg_holes (_: hole_id array): hole_id array Scheduler.t =
  *)
 
 
-let check (_: Content.t) (_: hole_id): action =
+let check (_: Hole_content.t) (_: hole_id): action =
     (* Verify that the content satisfies the specification of the hole. *)
     assert false
 
@@ -164,10 +130,10 @@ let prop (range: range): term =
      *)
     let rangef () = range
     in
-    let t = Content.make rangef Term.prop Term.any0
+    let t = Hole_content.make rangef Term.prop Term.any0
     in
     let build hole =
-        Scheduler.(
+        BS.(
             let* id = check t hole     |> make_task ReadyQ in
             let* _  = fill_hole hole t |> make_task (TaskQ id) in
             return ()
@@ -183,10 +149,10 @@ let prop (range: range): term =
 let any (range: range) (_: universe_term option): term =
     let rangef () = range
     in
-    let t = Content.make rangef Term.any0 Term.any1
+    let t = Hole_content.make rangef Term.any0 Term.any1
     in
     let build hole =
-        Scheduler.(
+        BS.(
             let* id = check t hole     |> make_task ReadyQ in
             let* _  = fill_hole hole t |> make_task (TaskQ id) in
             return ()
@@ -241,7 +207,7 @@ let application (fterm: term) (args: term list): term =
     let build _ =
         let args  = Array.of_list args in
         let nargs = Array.length args  in
-        Scheduler.(
+        BS.(
             let* type_holes = make_type_holes nargs in
             let* arg_holes  = make_arg_holes type_holes in
             let _ = arg_holes in
@@ -345,7 +311,7 @@ let add_definition
 
 
 let init (pname: string) (mname: string): t =
-    Elaboration_context.init pname mname
+    Context.init pname mname
 
 
 

@@ -1,13 +1,13 @@
 open Alba_parse
 
-module TP = Definition_parser.Make (Elaborator.Semantic) (Elaborator)
+module TP = Definition_parser.Make (Error) (Elaborator)
 
 module PL =
     Fmlib_parse.Parse_with_lexer.Make
         (Elaborator)
         (Token)
         (Unit)
-        (Definition_parser.Error (Elaborator.Semantic) (Elaborator))
+        (Definition_parser.Error (Error) (Elaborator))
         (Lexer)
         (TP)
 
