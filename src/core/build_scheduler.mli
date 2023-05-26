@@ -7,6 +7,9 @@ val return: 'a -> 'a t
 val fail:   Error.t -> 'a t
 val ( let* ): 'a t -> ('a -> 'b t) -> 'b t
 val ( >>=  ): 'a t -> ('a -> 'b t) -> 'b t
+val map: ('a -> 'b) -> 'a t -> 'b t
+val int_fold_left:  int -> 'a t -> (int -> 'a -> 'a t) -> 'a t
+val int_fold_right: int -> (int -> 'a -> 'a t) -> 'a t -> 'a t
 
 
 

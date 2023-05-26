@@ -95,7 +95,41 @@ let ( >>= ) (m: 'a t) (f: 'a -> 'b t): 'b t =
     | Error e ->
         Error e
 
+
 let ( let* ) = (>>=)
+
+
+
+let int_fold_left (n: int) (s: 'a t) (f: int -> 'a -> 'a t): 'a t =
+    assert (0 <= n);
+    let rec fold accu i =
+        if i = n then
+            accu
+        else
+            let* a = accu in
+            fold (f i a) (i + 1)
+    in
+    fold s 0
+
+
+
+let int_fold_right (n: int) (f: int -> 'a -> 'a t) (s: 'a t): 'a t =
+    assert (0 <= n);
+    let rec fold i accu =
+        if i = 0 then
+            accu
+        else
+            let i = i - 1 in
+            let* a = accu in
+            fold i (f i a)
+    in
+    fold n s
+
+
+
+let map (f: 'a -> 'b) (m: 'a t): 'b t =
+    let* a = m in
+    return (f a)
 
 
 
