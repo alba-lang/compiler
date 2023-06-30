@@ -1,3 +1,5 @@
+open Core
+
 type range = Fmlib_parse.Position.range
 
 type t

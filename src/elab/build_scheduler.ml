@@ -17,6 +17,8 @@
 
 *)
 
+open Core
+
 module Array    = Fmlib_std.Array
 
 type task_id    = Task of int

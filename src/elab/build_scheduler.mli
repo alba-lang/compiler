@@ -1,3 +1,5 @@
+open Core
+
 (** {1 Monad} *)
 
 

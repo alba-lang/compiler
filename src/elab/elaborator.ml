@@ -1,4 +1,5 @@
 open Std
+open Core
 
 module Position = Fmlib_parse.Position
 module Pretty = Fmlib_pretty.Print

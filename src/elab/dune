@@ -1,0 +1,7 @@
+(library
+  (name elab)
+  (public_name compiler.elab)
+  (libraries fmlib_std core)
+  (inline_tests)
+  (preprocess (pps ppx_inline_test))
+)
