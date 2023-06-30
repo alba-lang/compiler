@@ -1,52 +1,12 @@
-open Std
-
-
-
-module Binder_info =
-struct
-    type t = {
-        name: Name.t;
-        implicit: bool;
-        with_type: bool;        (* Explicitly typed *)
-        arrow: bool;            (* Only for products (A -> B) *)
-    }
-
-    let make name implicit with_type = {
-        name;
-        implicit;
-        with_type;
-        arrow = false;
-    }
-end
-
-
-
-module Argument_info =
-struct
-    type t = {
-        implicit: bool;
-    }
-end
-
-
-module Application_info =
-struct
-    type t =
-        | Normal
-        | Unary
-        | Binary
-end
-
-
 (* Experiment: Terms with phantom types *)
-type me
-type el
+type hole
+type nohole
 
 type 'a tt =
     | Prop: 'a tt
     | Any:  int -> 'a tt
     (* ... *)
-    | Meta: (int * int) -> me tt
+    | Meta: (int * int) -> hole tt
 
 
 
@@ -60,11 +20,11 @@ type t =
     | Meta  of int * int    (* Context, id in context *)
     | Pi of  binder array * t
     | Lam of binder array * t
-    | Application of Application_info.t * t * argument array
+    | Application of Info.Application.t * t * argument array
 
-and binder   = Binder_info.t   * t
+and binder   = Info.Binder.t   * t
 
-and argument = Argument_info.t * t
+and argument = Info.Argument.t * t
 
 
 
