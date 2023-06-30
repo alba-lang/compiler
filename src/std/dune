@@ -1,0 +1,7 @@
+(library
+  (name std)
+  (public_name compiler.std)
+  (libraries fmlib_std)
+  (inline_tests)
+  (preprocess (pps ppx_inline_test))
+)
