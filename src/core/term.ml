@@ -38,6 +38,16 @@ struct
 end
 
 
+(* Experiment: Terms with phantom types *)
+type me
+type el
+
+type 'a tt =
+    | Prop: 'a tt
+    | Any:  int -> 'a tt
+    (* ... *)
+    | Meta: (int * int) -> me tt
+
 
 
 

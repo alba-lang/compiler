@@ -40,6 +40,7 @@ module type STATE =
 sig
     type meta
     type term
+    type gamma
 
     type 'a res = ('a, Error.t) result
 
