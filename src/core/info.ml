@@ -23,6 +23,9 @@ struct
         with_type;
         arrow = false;
     }
+
+    let name (b: t): Name.t =
+        b.name
 end
 
 

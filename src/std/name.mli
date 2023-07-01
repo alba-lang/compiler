@@ -8,6 +8,9 @@ type info =
 
 type t = info * string
 
+val is_wildcard: t -> bool
+val compare: t -> t -> int
+
 val normal: string -> t
 val operator: string -> t
 val bracket_empty: string -> t

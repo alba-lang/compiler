@@ -9,6 +9,14 @@ type info =
 type t = info * string
 
 
+let compare ((_, s1): t) ((_, s2): t): int =
+    String.compare s1 s2
+
+
+let is_wildcard ((i, _): t): bool =
+    i = Wildcard
+
+
 let normal str = Normal, str
 
 let operator str =
