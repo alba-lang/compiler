@@ -11,12 +11,6 @@ type 'a tt =
     | Meta: (int * int) -> hole tt
 
 
-module Name_map =
-struct
-    type 'a t (* nyi *)
-end
-
-
 
 
 (* Type definition *)
