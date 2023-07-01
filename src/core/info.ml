@@ -1,8 +1,14 @@
 open Std
 
 
+module Pos =
+struct
+    type t
+end
 
-module Binder =
+
+
+module Bind =
 struct
     type t = {
         name: Name.t;
@@ -21,7 +27,7 @@ end
 
 
 
-module Argument =
+module Arg =
 struct
     type t = {
         implicit: bool;
@@ -29,10 +35,16 @@ struct
 end
 
 
-module Application =
+module App =
 struct
     type t =
         | Normal
         | Unary
         | Binary
+end
+
+
+module Def =
+struct
+    type t = bool (* is transparent *)
 end
