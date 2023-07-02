@@ -20,7 +20,7 @@ type hole_id = BS.hole_id
 type action = unit BS.t
 
 
-type t = Context.t
+type t = unit
 
 type term = {
     rangef: unit -> range;
@@ -360,8 +360,8 @@ let add_definition
 
 
 
-let init (pname: string) (mname: string): t =
-    Context.init pname mname
+let init (_: string) (_: string): t =
+    ()
 
 
 

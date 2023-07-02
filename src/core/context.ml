@@ -1,4 +1,4 @@
-type t = unit
-
-let init (_: string) (_: string): t =
-    ()
+type t = {
+    global: Globals.t;
+    gamma:  Gamma.t;
+}

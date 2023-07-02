@@ -1,3 +1,6 @@
+open Std
+open Core
+
 module Error =
 struct
     type t
@@ -7,10 +10,10 @@ end
 
 module type STATE =
 sig
+    type error
     type meta
     type term
     type gamma
-    type error
 
     type 'a res = ('a, error) result
 
@@ -30,9 +33,9 @@ end
 
 module type MON =
 sig
+    type error
     type meta
     type term
-    type error
     type 'a state
     type 'a res = ('a, error) result
     type ('a, 'z) t
@@ -40,7 +43,7 @@ sig
     val run: ('a, 'a) t -> 'a state -> 'a res
 
     val return: 'a -> ('a, 'z) t
-    val fail: error -> ('a, 'z) t
+    val fail: Error.t -> ('a, 'z) t
     val (>>=):    ('a, 'z) t -> ('a -> ('b, 'z) t) -> ('b, 'z) t
     val ( let* ): ('a, 'z) t -> ('a -> ('b, 'z) t) -> ('b, 'z) t
 
@@ -49,20 +52,30 @@ sig
 end
 
 
+module Econtext =
+struct
+    type term
+    type t
+end
+
+
+
 module State
     (* mutable *)
-        : STATE with type error := Error.t
 =
 struct
     type meta
-    type term
     type gamma
+    type term   = Econtext.term
     type 'a res = ('a, Error.t) result
 
     type 'a t = {
         mutable res:   ('a, Error.t) result option;
         mutable ready: ('a t -> unit) list;
     }
+
+    let init (_: Globals.t): Globals.t t =
+        assert false
 
     let blocking_error (_: 'a t): Error.t =
         assert false
@@ -102,16 +115,9 @@ end
 
 
 
-module Mon (State: STATE)
-    : MON
-    with type meta  := State.meta
-     and type term  := State.term
-     and type error := State.error
-     and type 'a state := 'a State.t
-=
+module Mon =
 struct
-    type 'a res = ('a, State.error) result
-    type error = State.error
+    type 'a res = ('a, Error.t) result
 
     type ('a, 'z) t =
         'z State.t -> ('a res -> 'z State.t -> unit) -> unit
@@ -120,7 +126,7 @@ struct
         fun s k ->
             k (Ok a) s
 
-    let fail (e: error): ('a, 'z) t =
+    let fail (e: Error.t): ('a, 'z) t =
         fun s k -> k (Error e) s
 
 
@@ -141,7 +147,7 @@ struct
         State.(execute s)
 
 
-    let get_meta (meta: State.meta) (f: State.term -> ('a, 'z) t): ('a, 'z) t =
+    let get_meta (meta: State.meta) (f: Econtext.term -> ('a, 'z) t): ('a, 'z) t =
         fun s k ->
         match State.get_meta meta s with
         | None ->
@@ -164,4 +170,51 @@ struct
             )
             s;
         k (Ok a) s
+end
+
+
+module Elab =
+struct
+    type range = Fmlib_parse.Position.range
+    type 'a located = range * 'a
+
+
+    type 'a elab = {
+        rangef: unit -> range;
+        monad: ('a, Globals.t) Mon.t;
+    }
+    type term = Econtext.term elab
+
+    type formal_argument
+
+    type t = Globals.t
+
+
+
+    let prop (_: range): term =
+        assert false
+
+
+    let formal_argument
+            (_: bool) (_: Name.t located list) (_: term option)
+        : formal_argument
+        =
+        assert false
+
+
+    let add_definition
+            (_: Name.t located)
+            (_: formal_argument list)
+            (tp: term)
+            (_: term option)
+            (elab: t)
+        : (t, Error.t) result
+        =
+        let state = State.init elab in
+        let mon =
+            let open Mon in
+            let* _ = tp.monad in
+            assert false
+        in
+        Mon.run mon state
 end
