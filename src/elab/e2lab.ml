@@ -14,20 +14,19 @@ sig
     type meta
     type term
     type gamma
+    type final
 
-    type 'a res = ('a, error) result
+    type t
 
-    type 'a t
+    val set_result: (final, error) result -> t -> unit
 
-    val set_result: 'a res -> 'a t -> unit
+    val get_meta: meta -> t -> term option
 
-    val get_meta: meta -> 'a t -> term option
+    val wait_meta: meta -> (term -> t -> unit) -> t -> unit
 
-    val wait_meta: meta -> (term -> 'a t -> unit) -> 'a t -> unit
+    val spawn: (t -> unit) -> t -> unit
 
-    val spawn: ('a t -> unit) -> 'a t -> unit
-
-    val execute: 'a t -> 'a res
+    val execute: t -> (final, error) result
 end
 
 
@@ -36,27 +35,41 @@ sig
     type error
     type meta
     type term
-    type 'a state
+    type final
+    type state
     type 'a res = ('a, error) result
-    type ('a, 'z) t
 
-    val run: ('a, 'a) t -> 'a state -> 'a res
+    type 'a t
 
-    val return: 'a -> ('a, 'z) t
-    val fail: Error.t -> ('a, 'z) t
-    val (>>=):    ('a, 'z) t -> ('a -> ('b, 'z) t) -> ('b, 'z) t
-    val ( let* ): ('a, 'z) t -> ('a -> ('b, 'z) t) -> ('b, 'z) t
+    val run: final t -> state -> final res
 
-    val spawn: (unit, 'z) t -> 'a -> ('a, 'z) t
-    val get_meta: meta -> (term -> ('a, 'z) t) -> ('a, 'z) t
+    val return: 'a -> 'a t
+    val fail: Error.t -> 'a t
+    val (>>=):    'a t -> ('a -> 'b t) -> 'b t
+    val ( let* ): 'a t -> ('a -> 'b t) -> 'b t
+
+    val spawn: unit t -> 'a -> 'a t
+    val get_meta: meta -> (term -> 'a t) -> 'a t
 end
+
+
+
 
 
 module Econtext =
 struct
+    type gamma
     type term
     type t
+
+    let prop (_: gamma): term =
+        assert false
+
+    let any (_: gamma): term =
+        assert false
 end
+
+
 
 
 
@@ -65,22 +78,29 @@ module State
 =
 struct
     type meta
-    type gamma
-    type term   = Econtext.term
-    type 'a res = ('a, Error.t) result
+    type term    = Econtext.term
+    type gamma   = Econtext.gamma
+    type res = (Globals.t, Error.t) result
 
-    type 'a t = {
-        mutable res:   ('a, Error.t) result option;
-        mutable ready: ('a t -> unit) list;
+    type t = {
+        mutable res:    res option;
+        mutable ready:  (t -> unit) list;
+        mutable gamma:  gamma;
     }
 
-    let init (_: Globals.t): Globals.t t =
+    let get_gamma (s: t): gamma =
+        s.gamma
+
+    let set_gamma (g: gamma) (s: t) =
+        s.gamma <- g
+
+    let init (_: Globals.t): t =
         assert false
 
-    let blocking_error (_: 'a t): Error.t =
+    let blocking_error (_: t): Error.t =
         assert false
 
-    let rec execute (s: 'a t): 'a res =
+    let rec execute (s: t): res =
         match s.res,  s.ready with
         | None, [] ->
             Error (blocking_error s)
@@ -92,22 +112,22 @@ struct
             res
 
 
-    let set_result (res: 'a res) (s: 'a t): unit =
+    let set_result (res: res) (s: t): unit =
         assert (s.res = None);
         s.res <- Some res
 
 
-    let spawn (f: 'a t -> unit) (s: 'a t): unit =
+    let spawn (f: t -> unit) (s: t): unit =
         s.ready <- f :: s.ready
 
 
-    let get_meta (_: meta) (_: 'a t): term option =
+    let get_meta (_: meta) (_: t): term option =
         (* Get the term associated with the metavariable, if the metavariable
          * has been instantiated. Otherwise return [None]. *)
         assert false
 
 
-    let wait_meta (_: meta) (_: term -> 'a t -> unit) (_: 'a t): unit =
+    let wait_meta (_: meta) (_: term -> t -> unit) (_: t): unit =
         (* If [meta] is instantiated then do the action [f term s].
          * Otherwise push [f] onto the wait queue for [meta]. *)
         assert false
@@ -117,20 +137,23 @@ end
 
 module Mon =
 struct
+    type term  = Econtext.term
+    type gamma = Econtext.gamma
+
     type 'a res = ('a, Error.t) result
 
-    type ('a, 'z) t =
-        'z State.t -> ('a res -> 'z State.t -> unit) -> unit
+    type 'a t =
+        State.t -> ('a res -> State.t -> unit) -> unit
 
-    let return (type a z) (a: a): (a, z) t =
+    let return (a: 'a): 'a t =
         fun s k ->
             k (Ok a) s
 
-    let fail (e: Error.t): ('a, 'z) t =
+    let fail (e: Error.t): 'a t =
         fun s k -> k (Error e) s
 
 
-    let (>>=) (m: ('a, 'z) t) (f: 'a -> ('b, 'z) t): ('b, 'z) t =
+    let (>>=) (m: 'a t) (f: 'a -> 'b t): 'b t =
         fun s k ->
         m s (fun res s ->
             match res with
@@ -139,15 +162,34 @@ struct
 
     let ( let* ) = (>>=)
 
-    let init (type a) (m: (a, a) t) (s: a State.t): unit =
+
+    let map (f: 'a -> 'b) (m: 'a t): 'b t =
+        fun s k ->
+        m s (fun res s ->
+            match res with
+            | Ok a         -> k (Ok (f a)) s
+            | Error _ as e -> k e s)
+
+
+    let init (m: 'a t) (s: State.t): unit =
         m s State.set_result
 
-    let run (m: ('a, 'a) t) (s: 'a State.t): 'a res =
+    let run (m: 'a t) (s: State.t): Globals.t res =
         init m s;
         State.(execute s)
 
 
-    let get_meta (meta: State.meta) (f: Econtext.term -> ('a, 'z) t): ('a, 'z) t =
+    let get_gamma: gamma t =
+        fun s k -> k (Ok (State.get_gamma s)) s
+
+
+    let set_gamma (g: gamma): unit t =
+        fun s k ->
+        State.set_gamma g s;
+        k (Ok ()) s
+
+
+    let get_meta (meta: State.meta) (f: term -> 'a t): 'a t =
         fun s k ->
         match State.get_meta meta s with
         | None ->
@@ -156,7 +198,7 @@ struct
             f term s k
 
 
-    let spawn (m: (unit, 'z) t) (a: 'a) : ('a, 'z) t =
+    let spawn (m: unit t) (a: 'a) : 'a t =
         fun s k ->
         State.spawn
             (fun s ->
@@ -170,28 +212,69 @@ struct
             )
             s;
         k (Ok a) s
+
+
+
+
+    (* Language specific functions *)
+
+    let prop: term t =
+        map Econtext.prop get_gamma
+
+    let any: term t =
+        map Econtext.any get_gamma
+end
+
+
+
+module Dummy
+        (State: STATE)
+        (Mon: MON with type error = State.error)
+=
+struct
 end
 
 
 module Elab =
 struct
-    type range = Fmlib_parse.Position.range
+    module Position = Fmlib_parse.Position
+
+    type range = Position.range
     type 'a located = range * 'a
 
 
     type 'a elab = {
         rangef: unit -> range;
-        monad: ('a, Globals.t) Mon.t;
+        monad: 'a Mon.t;
     }
-    type term = Econtext.term elab
+    type term = Mon.term elab
 
     type formal_argument
 
     type t = Globals.t
 
 
+    let make_rangef (range: range) (): range =
+        range
 
-    let prop (_: range): term =
+    let prop (range: range): term =
+        {
+            rangef = make_rangef range;
+            monad  = Mon.prop;
+        }
+
+    let any (range: range): term =
+        (* nyi: universe term *)
+        {
+            rangef = make_rangef range;
+            monad = assert false;
+        }
+
+    let formal_argument_simple
+            (_: range)
+            (_: Name.t) (* untyped and explicit *)
+        : formal_argument
+        =
         assert false
 
 
@@ -201,6 +284,15 @@ struct
         =
         assert false
 
+
+
+    let product_expression
+            (_: Position.t)
+            (_: formal_argument list)
+            (_: term) (* result type *)
+        : term
+        =
+        assert false
 
     let add_definition
             (_: Name.t located)
