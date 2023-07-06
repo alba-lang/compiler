@@ -1,25 +1,10 @@
 open Std
 
-(* Experiment: Terms with phantom types *)
-type hole
-type nohole
-
-type 'a tt =
-    | Prop: 'a tt
-    | Any:  int -> 'a tt
-    (* ... *)
-    | Meta: (int * int) -> hole tt
-
-
 
 
 (* Type definition *)
 
-type t  = Info.Pos.t option * t0
-
-and tp  = t  (* synonym *)
-
-and t0 =
+type t =
     (* sorts *)
     | Prop
     | Any of int            (* 0 or 1 *)
@@ -55,6 +40,8 @@ and t0 =
           * tree    (* case tree *)
           * pointer (* pointer into arguments *)
 
+
+and tp  = t  (* synonym *)
 
 and var_binder = Info.Bind.t * tp
 
@@ -98,6 +85,10 @@ and pointer = unit (* nyi *)
 
 (* Functions *)
 
-let prop: t = (None, Prop)
-let any0: t = (None, Any 0)
-let any1: t = (None, Any 1)
+let prop: t = Prop
+let any0: t = Any 0
+let any1: t = Any 1
+
+
+let equal (_: t) (_: t): bool =
+    assert false

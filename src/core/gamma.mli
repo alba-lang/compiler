@@ -1,7 +1,17 @@
+include Intf.GAMMA
+(*
+type term
+type equiv
+type subtype
+
 type t
 
-val count: t -> int
+val index: t -> int
 
-val empty: ?id:int -> unit -> t
+val empty: int -> t
 
-val push: ?id:int -> Term.gen_binder -> t -> t
+val push_var: int -> Info.Bind.t -> term -> t -> t
+
+
+val any: int -> t -> term
+*)
