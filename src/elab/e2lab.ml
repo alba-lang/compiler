@@ -1,9 +1,22 @@
+open Fmlib_std
 open Std
 open Core
 
+module Position = Fmlib_parse.Position
+
+type range = Position.range
+type 'a located = range * 'a
+
+
 module Error =
 struct
-    type t
+    type t = {
+        rangef: unit -> range;
+        tag:    string;
+    }
+
+    let make (rangef: unit -> range) (tag: string): t =
+        {rangef; tag}
 end
 
 
@@ -30,26 +43,23 @@ sig
 end
 
 
+
+
+(* Basic monad to be usable for language specific modules like [Gamma] i.e.
+ * modules from [Core]
+ *)
+
 module type MON =
 sig
-    type error
-    type meta
     type term
-    type final
-    type state
-    type 'a res = ('a, error) result
+    type requirement
+    type gamma
 
     type 'a t
-
-    val run: final t -> state -> final res
-
     val return: 'a -> 'a t
-    val fail: Error.t -> 'a t
-    val (>>=):    'a t -> ('a -> 'b t) -> 'b t
-    val ( let* ): 'a t -> ('a -> 'b t) -> 'b t
+    val (>>=): 'a t -> ('a -> 'b t) -> 'b t
 
-    val spawn: unit t -> 'a -> 'a t
-    val get_meta: meta -> (term -> 'a t) -> 'a t
+    val new_gamma: (int -> gamma) -> gamma t
 end
 
 
@@ -60,13 +70,32 @@ module Econtext =
 struct
     type gamma
     type term
-    type t
+    type requirement (* required type or signature *)
+
+    let empty_gamma (_: int) (_: Globals.t): gamma =
+        assert false
+
+
+    let top  (_: gamma): term =
+        assert false
 
     let prop (_: gamma): term =
         assert false
 
     let any (_: gamma): term =
         assert false
+
+    module Monadic
+            (M: MON
+             with type gamma       = gamma
+              and type term        = term
+              and type requirement = requirement
+            )
+    =
+    struct
+        let prop (_: requirement) (_: gamma): term M.t =
+            M.return (assert false)
+    end
 end
 
 
@@ -85,17 +114,22 @@ struct
     type t = {
         mutable res:    res option;
         mutable ready:  (t -> unit) list;
-        mutable gamma:  gamma;
+        mutable globals: Globals.t;
+        mutable gammas: gamma array; (* Never empty! *)
     }
 
-    let get_gamma (s: t): gamma =
-        s.gamma
 
-    let set_gamma (g: gamma) (s: t) =
-        s.gamma <- g
+    let make (globals: Globals.t): t =
+        { res = None;
+          ready = [];
+          globals;
+          gammas =
+              [| Econtext.empty_gamma 0 globals |];
+        }
 
-    let init (_: Globals.t): t =
-        assert false
+
+    let empty_context (s: t): gamma =
+        s.gammas.(0)
 
     let blocking_error (_: t): Error.t =
         assert false
@@ -137,8 +171,13 @@ end
 
 module Mon =
 struct
-    type term  = Econtext.term
-    type gamma = Econtext.gamma
+    type term        = Econtext.term
+    type gamma       = Econtext.gamma
+    type requirement = Econtext.requirement
+
+
+
+    (* Basic Monad *)
 
     type 'a res = ('a, Error.t) result
 
@@ -179,16 +218,6 @@ struct
         State.(execute s)
 
 
-    let get_gamma: gamma t =
-        fun s k -> k (Ok (State.get_gamma s)) s
-
-
-    let set_gamma (g: gamma): unit t =
-        fun s k ->
-        State.set_gamma g s;
-        k (Ok ()) s
-
-
     let get_meta (meta: State.meta) (f: term -> 'a t): 'a t =
         fun s k ->
         match State.get_meta meta s with
@@ -215,60 +244,128 @@ struct
 
 
 
+    (* Helper functions *)
+
+    let reduce_list
+            (f: 'accu -> 'el -> 'accu t)
+            (start: 'el -> 'accu t)
+            (lst: 'el list)
+        : 'accu t
+        =
+        match lst with
+        | [] ->
+            assert false (* illegal call *)
+        | el :: lst ->
+            let rec go accu = function
+                | [] -> return accu
+                | el :: lst ->
+                    let* accu = f accu el in
+                    go accu lst
+            in
+            let* accu = start el in
+            go accu lst
+
+
+    let fold_left
+            (type accu el)
+            (f: accu -> el -> accu t)
+            (start: accu)
+            (lst: el list)
+        : accu t
+        =
+        let rec go accu = function
+            | [] -> return accu
+            | el :: lst ->
+                let* accu = f accu el in
+                go accu lst
+        in
+        go start lst
+
+
 
     (* Language specific functions *)
 
-    let prop: term t =
-        map Econtext.prop get_gamma
+    let type_requirement (): requirement t =
+        assert false
 
-    let any: term t =
-        map Econtext.any get_gamma
+    let top (g: gamma): term t =
+        return (Econtext.top g)
+
+    let prop (g: gamma): term t =
+        return (Econtext.prop g)
+
+    let any (g: gamma): term t =
+        return (Econtext.any g)
+
+
+    let make_meta (_: term) (_: unit -> Error.t) (_: gamma): term t =
+        assert false
+
+    let push_variable (_: bool) (_: Name.t) (_: term) (_: gamma): gamma t =
+        assert false
 end
 
 
 
-module Dummy
-        (State: STATE)
-        (Mon: MON with type error = State.error)
-=
-struct
-end
+
+
 
 
 module Elab =
 struct
-    module Position = Fmlib_parse.Position
-
-    type range = Position.range
-    type 'a located = range * 'a
+    type 'a with_range =
+        (unit -> range) * 'a
 
 
-    type 'a elab = {
-        rangef: unit -> range;
-        monad: 'a Mon.t;
-    }
-    type term = Mon.term elab
 
-    type formal_argument
+    type term =
+        (Econtext.gamma -> Econtext.term Mon.t) with_range
+
+    type formal_argument =
+        Econtext.gamma -> Econtext.gamma Mon.t
+
 
     type t = Globals.t
 
 
-    let make_rangef (range: range) (): range =
-        range
+    let ( let* ) = Mon.( let* )
+
+
+
+    (* Helper Functions *)
+
+
+    let range_of_names (names: Name.t located list) (): range =
+        match names with
+        | [] -> assert false (* Illegal call *)
+        | ((pos1, pos2), _) :: names ->
+            pos1,
+            List.fold_left
+                (fun _ ((_, pos2), _) -> pos2)
+                pos2
+                names
+
+
+
+
+
+    (* ------------------------------------------------------------*)
+    (* Functions to satisfy module type [ELABORATOR]               *)
+    (* ------------------------------------------------------------*)
+
+
 
     let prop (range: range): term =
-        {
-            rangef = make_rangef range;
-            monad  = Mon.prop;
-        }
+        (fun () -> range),
+        Mon.prop
+
+
 
     let any (range: range): term =
         (* nyi: universe term *)
-        {
-            rangef = make_rangef range;
-            monad = assert false;
-        }
+        (fun () -> range),
+        Mon.any
+
 
     let formal_argument_simple
             (_: range)
@@ -278,11 +375,33 @@ struct
         assert false
 
 
+
     let formal_argument
-            (_: bool) (_: Name.t located list) (_: term option)
+            (implicit: bool)
+            (names: Name.t located list)
+            (tp: term option)
         : formal_argument
         =
-        assert false
+        let f gamma =
+            let* tp =
+                match tp with
+                | None ->
+                    let* top = Mon.top gamma
+                    in
+                    let reason = assert false (* nyi *)
+                    in
+                    Mon.make_meta top reason gamma
+                | Some tp ->
+                    (snd tp) gamma
+            in
+            Mon.(reduce_list
+                    (fun gamma (_, n) ->
+                        Mon.push_variable implicit n tp gamma)
+                    (fun (_, n) ->
+                        Mon.push_variable implicit n tp gamma)
+                    names)
+        in
+        f
 
 
 
@@ -294,19 +413,31 @@ struct
         =
         assert false
 
+
     let add_definition
             (_: Name.t located)
-            (_: formal_argument list)
+            (fargs: formal_argument list)
             (tp: term)
-            (_: term option)
+            (body: term option)
             (elab: t)
         : (t, Error.t) result
         =
-        let state = State.init elab in
+        let state = State.make elab in
         let mon =
             let open Mon in
-            let* _ = tp.monad in
-            assert false
+            let* gamma =
+                fold_left
+                    (fun gamma f -> f gamma)
+                    (State.empty_context state)
+                    fargs
+            in
+            let* _ = (snd tp) gamma
+            in
+            match body with
+            | None ->
+                assert false
+            | Some _ ->
+                assert false
         in
         Mon.run mon state
 end
