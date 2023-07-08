@@ -83,19 +83,25 @@ struct
     type term
     type requirement (* required type or signature *)
 
+    type check_result =
+        | Checked of term
+        | Rejected
+        | Maybe
+
+
     let empty_gamma (_: int) (_: Globals.t): gamma =
         assert false
-
 
     let top  (_: gamma): term =
         assert false
 
+(*
     let prop (_: gamma): term =
         assert false
 
     let any (_: gamma): term =
         assert false
-
+*)
     module Monadic
             (M: MON
              with type gamma       = gamma
@@ -104,14 +110,27 @@ struct
             )
     =
     struct
-        let type_requirement (): requirement M.t =
+        let type_requirement (_: gamma): requirement M.t =
             M.return (assert false)
 
-        let prop (_: gamma) (_: requirement): term M.t =
+        let check (_: term) (_: requirement) (_: gamma): check_result M.t =
+            assert false
+
+        let prop (_: gamma): term M.t =
             M.return (assert false)
 
-        let any  (_: gamma) (_: requirement): term M.t =
+        let any  (_: gamma): term M.t =
             M.return (assert false)
+
+
+        let push_variable
+                (_: bool)
+                (_: Name.t)
+                (_: term)
+                (_: gamma)
+            : gamma M.t
+            =
+            assert false
     end
 end
 
@@ -357,9 +376,6 @@ struct
 
     let make_meta (_: term) (_: unit -> Error.t) (_: gamma): term t =
         assert false
-
-    let push_variable (_: bool) (_: Name.t) (_: term) (_: gamma): gamma t =
-        assert false
 end
 
 
@@ -379,7 +395,7 @@ struct
 
 
     type term =
-        (Ec.gamma -> Ec.requirement -> Ec.term Mon.t) with_range
+        (Ec.gamma -> Ec.term Mon.t) with_range
 
     type formal_argument =
         Econtext.gamma -> Econtext.gamma Mon.t
@@ -395,9 +411,13 @@ struct
     (* Helper Functions *)
 
 
-    let type_term (gamma: Ec.gamma) ((_, f): term): Ec.term Mon.t =
-        let* req = Ecm.type_requirement () in
-        f gamma req
+    let farg_type (gamma: Ec.gamma) ((_, f): term): Ec.term Mon.t =
+        let* req = Ecm.type_requirement gamma in
+        let* t   = f gamma in
+        let* res = Ecm.check t req gamma in
+        match res with
+        | _ ->
+            assert false (* nyi *)
 
 
     let range_of_names (names: Name.t located list) (): range =
@@ -460,13 +480,13 @@ struct
                     in
                     Mon.make_meta top reason gamma
                 | Some tp ->
-                    type_term gamma tp
+                    farg_type gamma tp
             in
             Mon.(reduce_list
                     (fun gamma (_, n) ->
-                        Mon.push_variable implicit n tp gamma)
+                        Ecm.push_variable implicit n tp gamma)
                     (fun (_, n) ->
-                        Mon.push_variable implicit n tp gamma)
+                        Ecm.push_variable implicit n tp gamma)
                     names)
         in
         f
@@ -499,7 +519,7 @@ struct
                     (State.empty_context state)
                     fargs
             in
-            let* _ = type_term gamma tp in
+            let* _ = farg_type gamma tp in
             match body with
             | None ->
                 assert false
