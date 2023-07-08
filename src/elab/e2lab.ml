@@ -288,6 +288,11 @@ struct
             f term s k
 
 
+    let next_tick (m: 'a t): 'a t =
+        fun s k ->
+        State.spawn (fun s -> m s k) s
+
+
     let spawn (m: unit t) (a: 'a) : 'a t =
         fun s k ->
         State.spawn
