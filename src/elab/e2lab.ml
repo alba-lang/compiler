@@ -123,6 +123,9 @@ module State
     (* mutable *)
 =
 struct
+    exception Done of Globals.t
+    exception Fail of Error.t
+
     type meta
     type term    = Econtext.term
     type gamma   = Econtext.gamma
@@ -243,12 +246,28 @@ struct
             | Error _ as e -> k e s)
 
 
-    let init (m: 'a t) (s: State.t): unit =
+    let init (m: Globals.t t) (s: State.t): unit =
         m s State.set_result
 
-    let run (m: 'a t) (s: State.t): Globals.t res =
-        init m s;
+
+    let run (m: Globals.t t) (s: State.t): Globals.t res =
+        m s State.set_result;
         State.(execute s)
+
+
+    let run2 (m: Globals.t t) (g: Globals.t): (Globals.t, Error.t) result =
+        (* Alternative run, using exceptions instead of a result type. *)
+        let s = State.make g
+        in
+        m s (fun res _ ->
+            match res with
+            | Ok g    -> raise (State.Done g)
+            | Error e -> raise (State.Fail e));
+        try
+            let _ = State.execute s in
+            assert false
+        with State.Done g -> Ok g
+           | State.Fail e -> Error e
 
 
     let fresh_id: int t =
