@@ -92,16 +92,6 @@ struct
     let empty_gamma (_: int) (_: Globals.t): gamma =
         assert false
 
-    let top  (_: gamma): term =
-        assert false
-
-(*
-    let prop (_: gamma): term =
-        assert false
-
-    let any (_: gamma): term =
-        assert false
-*)
     module Monadic
             (M: MON
              with type gamma       = gamma
@@ -112,6 +102,15 @@ struct
     struct
         let type_requirement (_: gamma): requirement M.t =
             M.return (assert false)
+
+
+
+        let make_meta (_: requirement) (_: gamma): term M.t =
+            (* Make a metavariables which satisfies a requirement *)
+            assert false
+
+
+
 
         let check (_: term) (_: requirement) (_: gamma): check_result M.t =
             assert false
@@ -142,9 +141,9 @@ module State
     (* mutable *)
 =
 struct
-    type meta
-    type term    = Econtext.term
-    type gamma   = Econtext.gamma
+    type term        = Econtext.term
+    type requirement = Econtext.requirement
+    type gamma       = Econtext.gamma
 
     type t = {
         mutable ready:  (t -> unit) list;
@@ -166,6 +165,9 @@ struct
         s.nids <- s.nids + 1;
         id
 
+    let is_valid_context (i: int) (s: t): bool =
+        i < Array.length s.gammas
+
 
     let empty_context (s: t): gamma =
         s.gammas.(0)
@@ -181,10 +183,45 @@ struct
             execute s
 
 
+    let make_meta
+            (_: requirement)
+            (i: int)            (* in context [i] *)
+            (s: t)
+        : int                   (* the id of the meta in the context *)
+        =
+        assert (is_valid_context i s);
+        assert false
+
+
+
+    let is_filled (_: int) (_: int) (_: t): bool =
+        assert false
+
+
+    let fill_term (gam: int) (meta: int) (s: t): term =
+        assert (is_filled gam meta s);
+        assert false
+
+
+    let fill_meta
+            (_: int)                (* context id *)
+            (_: int)                (* id in the context *)
+            (_: term)
+            (_: t)
+        : unit
+        =
+        assert false
+
+
     let spawn (f: t -> unit) (s: t): unit =
         s.ready <- f :: s.ready
 
-    let wait_meta (_: meta) (_: term -> t -> unit) (_: t -> unit) (_: t): unit =
+    let wait_meta
+            (_: int)
+            (_: int)
+            (_: term -> t -> unit) (_: t -> unit) (_: t)
+        : unit
+        =
         (* If [meta] is instantiated then do the action [f term s].
          * Otherwise push [f] and the error handler [e] onto the wait queue for
          * [meta]. *)
@@ -255,9 +292,9 @@ struct
         assert false
 
 
-    let get_meta (meta: State.meta) (f: term -> 'a t) (e: 'a t): 'a t =
+    let wait_meta (gam: int) (meta: int) (f: term -> 'a t) (e: 'a t): 'a t =
         fun s k ->
-        State.wait_meta meta (fun term s -> f term s k) (fun s -> e s k) s
+        State.wait_meta gam meta (fun term s -> f term s k) (fun s -> e s k) s
 
 
     let next_tick (m: 'a t): 'a t =
@@ -346,6 +383,12 @@ struct
     (* Helper Functions *)
 
 
+    let make_type_meta (gamma: Ec.gamma): Ec.term Mon.t =
+        let* req = Ecm.type_requirement gamma in
+        Ecm.make_meta req gamma
+
+
+
     let farg_type (gamma: Ec.gamma) ((_, f): term): Ec.term Mon.t =
         let* req = Ecm.type_requirement gamma in
         let* t   = f gamma in
@@ -390,12 +433,22 @@ struct
         Ecm.any
 
 
+    let name_term (_: range) (_: Name.t): term =
+        assert false
+
+
+    let application (_: term) (_: term list): term =
+        assert false
+
+
     let formal_argument_simple
             (_: range)
-            (_: Name.t) (* untyped and explicit *)
+            ((_, n): Name.t located) (* untyped and explicit *)
         : formal_argument
         =
-        assert false
+        fun gamma ->
+        let* tp = make_type_meta gamma in
+        Ecm.push_variable false n tp gamma
 
 
 
@@ -405,22 +458,24 @@ struct
             (tp: term option)
         : formal_argument
         =
-        let f gamma =
-            let* tp =
-                match tp with
-                | None ->
-                    assert false
-                | Some tp ->
-                    farg_type gamma tp
-            in
-            Mon.(reduce_list
-                    (fun gamma (_, n) ->
-                        Ecm.push_variable implicit n tp gamma)
-                    (fun (_, n) ->
-                        Ecm.push_variable implicit n tp gamma)
-                    names)
+        fun gamma ->
+        let* tp =
+            match tp with
+            | None ->
+                make_type_meta gamma
+            | Some tp ->
+                farg_type gamma tp
         in
-        f
+        let push n gamma =
+            Ecm.push_variable implicit n tp gamma
+        in
+        Mon.(reduce_list
+                 (fun gamma (_, n) -> push n gamma)
+                 (fun (_, n) -> push n gamma)
+                 names)
+
+
+
 
 
 
@@ -431,6 +486,22 @@ struct
         : term
         =
         assert false
+
+
+
+    let lambda_expression
+            (_: Position.t)
+            (_: formal_argument list)
+            (_: term option)          (* result type *)
+            (_: term)                 (* body *)
+        : term
+        =
+        assert false
+
+
+
+
+
 
 
     let add_definition
