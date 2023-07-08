@@ -8,6 +8,10 @@ type range = Position.range
 type 'a located = range * 'a
 
 
+
+
+
+
 module Error =
 struct
     type t = {
@@ -18,6 +22,9 @@ struct
     let make (rangef: unit -> range) (tag: string): t =
         {rangef; tag}
 end
+
+
+
 
 
 
@@ -45,6 +52,8 @@ end
 
 
 
+
+
 (* Basic monad to be usable for language specific modules like [Gamma] i.e.
  * modules from [Core]
  *)
@@ -58,6 +67,8 @@ sig
     type 'a t
     val return: 'a -> 'a t
     val (>>=): 'a t -> ('a -> 'b t) -> 'b t
+
+    val fresh_id: int t
 
     val new_gamma: (int -> gamma) -> gamma t
 end
@@ -93,7 +104,13 @@ struct
             )
     =
     struct
-        let prop (_: requirement) (_: gamma): term M.t =
+        let type_requirement (): requirement M.t =
+            M.return (assert false)
+
+        let prop (_: gamma) (_: requirement): term M.t =
+            M.return (assert false)
+
+        let any  (_: gamma) (_: requirement): term M.t =
             M.return (assert false)
     end
 end
@@ -116,6 +133,7 @@ struct
         mutable ready:  (t -> unit) list;
         mutable globals: Globals.t;
         mutable gammas: gamma array; (* Never empty! *)
+        mutable nids:   int;
     }
 
 
@@ -125,7 +143,14 @@ struct
           globals;
           gammas =
               [| Econtext.empty_gamma 0 globals |];
+          nids = 0;
         }
+
+
+    let fresh_id (s: t): int =
+        let id = s.nids in
+        s.nids <- s.nids + 1;
+        id
 
 
     let empty_context (s: t): gamma =
@@ -166,6 +191,14 @@ struct
          * Otherwise push [f] onto the wait queue for [meta]. *)
         assert false
 end
+
+
+
+
+
+
+
+
 
 
 
@@ -216,6 +249,15 @@ struct
     let run (m: 'a t) (s: State.t): Globals.t res =
         init m s;
         State.(execute s)
+
+
+    let fresh_id: int t =
+        fun s k ->
+        k (Ok (State.fresh_id s)) s
+
+
+    let new_gamma (_: int -> gamma): gamma t =
+        assert false
 
 
     let get_meta (meta: State.meta) (f: term -> 'a t): 'a t =
@@ -285,17 +327,8 @@ struct
 
     (* Language specific functions *)
 
-    let type_requirement (): requirement t =
-        assert false
-
     let top (g: gamma): term t =
         return (Econtext.top g)
-
-    let prop (g: gamma): term t =
-        return (Econtext.prop g)
-
-    let any (g: gamma): term t =
-        return (Econtext.any g)
 
 
     let make_meta (_: term) (_: unit -> Error.t) (_: gamma): term t =
@@ -316,10 +349,13 @@ struct
     type 'a with_range =
         (unit -> range) * 'a
 
+    module Ec = Econtext
+
+    module Ecm = Econtext.Monadic (Mon)
 
 
     type term =
-        (Econtext.gamma -> Econtext.term Mon.t) with_range
+        (Ec.gamma -> Ec.requirement -> Ec.term Mon.t) with_range
 
     type formal_argument =
         Econtext.gamma -> Econtext.gamma Mon.t
@@ -333,6 +369,11 @@ struct
 
 
     (* Helper Functions *)
+
+
+    let type_term (gamma: Ec.gamma) ((_, f): term): Ec.term Mon.t =
+        let* req = Ecm.type_requirement () in
+        f gamma req
 
 
     let range_of_names (names: Name.t located list) (): range =
@@ -349,6 +390,9 @@ struct
 
 
 
+
+
+
     (* ------------------------------------------------------------*)
     (* Functions to satisfy module type [ELABORATOR]               *)
     (* ------------------------------------------------------------*)
@@ -357,14 +401,14 @@ struct
 
     let prop (range: range): term =
         (fun () -> range),
-        Mon.prop
+        Ecm.prop
 
 
 
     let any (range: range): term =
         (* nyi: universe term *)
         (fun () -> range),
-        Mon.any
+        Ecm.any
 
 
     let formal_argument_simple
@@ -392,7 +436,7 @@ struct
                     in
                     Mon.make_meta top reason gamma
                 | Some tp ->
-                    (snd tp) gamma
+                    type_term gamma tp
             in
             Mon.(reduce_list
                     (fun gamma (_, n) ->
@@ -431,8 +475,7 @@ struct
                     (State.empty_context state)
                     fargs
             in
-            let* _ = (snd tp) gamma
-            in
+            let* _ = type_term gamma tp in
             match body with
             | None ->
                 assert false
