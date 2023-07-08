@@ -142,27 +142,19 @@ module State
     (* mutable *)
 =
 struct
-    exception Done of Globals.t
-    exception Fail of Error.t
-
     type meta
     type term    = Econtext.term
     type gamma   = Econtext.gamma
-    type res = (Globals.t, Error.t) result
 
     type t = {
-        mutable res:    res option;
         mutable ready:  (t -> unit) list;
-        mutable globals: Globals.t;
         mutable gammas: gamma array; (* Never empty! *)
         mutable nids:   int;
     }
 
 
     let make (globals: Globals.t): t =
-        { res = None;
-          ready = [];
-          globals;
+        { ready = [];
           gammas =
               [| Econtext.empty_gamma 0 globals |];
           nids = 0;
@@ -178,39 +170,24 @@ struct
     let empty_context (s: t): gamma =
         s.gammas.(0)
 
-    let blocking_error (_: t): Error.t =
-        assert false
 
-    let rec execute (s: t): res =
-        match s.res,  s.ready with
-        | None, [] ->
-            Error (blocking_error s)
-        | None, f :: ready ->
+    let rec execute (s: t): 'a =
+        match s.ready with
+        | [] ->
+            assert false (* shall never happen *)
+        | f :: ready ->
             s.ready <- ready;
             f s;
             execute s
-        | Some res, _ ->
-            res
-
-
-    let set_result (res: res) (s: t): unit =
-        assert (s.res = None);
-        s.res <- Some res
 
 
     let spawn (f: t -> unit) (s: t): unit =
         s.ready <- f :: s.ready
 
-
-    let get_meta (_: meta) (_: t): term option =
-        (* Get the term associated with the metavariable, if the metavariable
-         * has been instantiated. Otherwise return [None]. *)
-        assert false
-
-
-    let wait_meta (_: meta) (_: term -> t -> unit) (_: t): unit =
+    let wait_meta (_: meta) (_: term -> t -> unit) (_: t -> unit) (_: t): unit =
         (* If [meta] is instantiated then do the action [f term s].
-         * Otherwise push [f] onto the wait queue for [meta]. *)
+         * Otherwise push [f] and the error handler [e] onto the wait queue for
+         * [meta]. *)
         assert false
 end
 
@@ -226,6 +203,9 @@ end
 
 module Mon =
 struct
+    exception Done of Globals.t
+    exception Fail of Error.t
+
     type term        = Econtext.term
     type gamma       = Econtext.gamma
     type requirement = Econtext.requirement
@@ -234,77 +214,50 @@ struct
 
     (* Basic Monad *)
 
-    type 'a res = ('a, Error.t) result
-
     type 'a t =
-        State.t -> ('a res -> State.t -> unit) -> unit
+        State.t -> ('a -> State.t -> unit) -> unit
 
     let return (a: 'a): 'a t =
         fun s k ->
-            k (Ok a) s
+            k a s
 
     let fail (e: Error.t): 'a t =
-        fun s k -> k (Error e) s
+        (fun _ _ -> raise (Fail e))
 
 
     let (>>=) (m: 'a t) (f: 'a -> 'b t): 'b t =
         fun s k ->
-        m s (fun res s ->
-            match res with
-            | Ok a          -> f a s k
-            | Error _ as e  -> k e s)
+        m s (fun a s -> f a s k)
 
     let ( let* ) = (>>=)
 
 
     let map (f: 'a -> 'b) (m: 'a t): 'b t =
         fun s k ->
-        m s (fun res s ->
-            match res with
-            | Ok a         -> k (Ok (f a)) s
-            | Error _ as e -> k e s)
+        m s (fun a s -> k (f a) s)
 
 
-    let init (m: Globals.t t) (s: State.t): unit =
-        m s State.set_result
-
-
-    let run (m: Globals.t t) (s: State.t): Globals.t res =
-        m s State.set_result;
-        State.(execute s)
-
-
-    let run2 (m: Globals.t t) (g: Globals.t): (Globals.t, Error.t) result =
-        (* Alternative run, using exceptions instead of a result type. *)
-        let s = State.make g
-        in
-        m s (fun res _ ->
-            match res with
-            | Ok g    -> raise (State.Done g)
-            | Error e -> raise (State.Fail e));
+    let run (m: Globals.t t) (s: State.t): (Globals.t, Error.t) result =
+        m s (fun g _ -> raise (Done g));
         try
             let _ = State.execute s in
             assert false
-        with State.Done g -> Ok g
-           | State.Fail e -> Error e
+        with Done g -> Ok g
+           | Fail e -> Error e
 
 
     let fresh_id: int t =
         fun s k ->
-        k (Ok (State.fresh_id s)) s
+        k (State.fresh_id s) s
 
 
     let new_gamma (_: int -> gamma): gamma t =
         assert false
 
 
-    let get_meta (meta: State.meta) (f: term -> 'a t): 'a t =
+    let get_meta (meta: State.meta) (f: term -> 'a t) (e: 'a t): 'a t =
         fun s k ->
-        match State.get_meta meta s with
-        | None ->
-            State.wait_meta meta (fun term s -> f term s k) s
-        | Some term ->
-            f term s k
+        State.wait_meta meta (fun term s -> f term s k) (fun s -> e s k) s
 
 
     let next_tick (m: 'a t): 'a t =
@@ -316,16 +269,9 @@ struct
         fun s k ->
         State.spawn
             (fun s ->
-                 m s (
-                     fun res s ->
-                         match res with
-                         | Ok () -> ()
-                         | Error _ as e ->
-                             State.set_result e s
-                 )
-            )
+                 m s (fun () _ -> ()))
             s;
-        k (Ok a) s
+        k a s
 
 
 
@@ -365,17 +311,6 @@ struct
                 go accu lst
         in
         go start lst
-
-
-
-    (* Language specific functions *)
-
-    let top (g: gamma): term t =
-        return (Econtext.top g)
-
-
-    let make_meta (_: term) (_: unit -> Error.t) (_: gamma): term t =
-        assert false
 end
 
 
@@ -474,11 +409,7 @@ struct
             let* tp =
                 match tp with
                 | None ->
-                    let* top = Mon.top gamma
-                    in
-                    let reason = assert false (* nyi *)
-                    in
-                    Mon.make_meta top reason gamma
+                    assert false
                 | Some tp ->
                     farg_type gamma tp
             in
