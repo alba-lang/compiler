@@ -28,31 +28,6 @@ end
 
 
 
-module type STATE =
-sig
-    type error
-    type meta
-    type term
-    type gamma
-    type final
-
-    type t
-
-    val set_result: (final, error) result -> t -> unit
-
-    val get_meta: meta -> t -> term option
-
-    val wait_meta: meta -> (term -> t -> unit) -> t -> unit
-
-    val spawn: (t -> unit) -> t -> unit
-
-    val execute: t -> (final, error) result
-end
-
-
-
-
-
 
 (* Basic monad to be usable for language specific modules like [Gamma] i.e.
  * modules from [Core]
@@ -65,12 +40,12 @@ sig
     type gamma
 
     type 'a t
-    val return: 'a -> 'a t
-    val (>>=): 'a t -> ('a -> 'b t) -> 'b t
+    val return:   'a -> 'a t
+    val (>>=):    'a t -> ('a -> 'b t) -> 'b t
+    val ( let* ): 'a t -> ('a -> 'b t) -> 'b t
 
     val fresh_id: int t
-
-    val new_gamma: (int -> gamma) -> gamma t
+    val new_gamma: int t
 end
 
 
@@ -122,6 +97,12 @@ struct
             M.return (assert false)
 
 
+        let new_gamma (_: Globals.t): gamma M.t =
+            M.(
+                let* _ = new_gamma in
+                assert false
+            )
+
         let push_variable
                 (_: bool)
                 (_: Name.t)
@@ -129,7 +110,10 @@ struct
                 (_: gamma)
             : gamma M.t
             =
-            assert false
+            M.(
+                let* _ = new_gamma in
+                assert false
+            )
     end
 end
 
@@ -143,19 +127,27 @@ module State
 struct
     type term        = Econtext.term
     type requirement = Econtext.requirement
-    type gamma       = Econtext.gamma
+
 
     type t = {
         mutable ready:  (t -> unit) list;
-        mutable gammas: gamma array; (* Never empty! *)
+        mutable gammas: int array ref array;
+                    (* each gamma can have a set of metas *)
+        mutable metas:  meta array;
         mutable nids:   int;
     }
 
+    and meta = {
+        req:           requirement;
+        mutable term:  term option;
+        mutable waitq: ((term -> t -> unit) * (t -> unit)) list;
+    }
 
-    let make (globals: Globals.t): t =
+
+    let make (): t =
         { ready = [];
-          gammas =
-              [| Econtext.empty_gamma 0 globals |];
+          gammas = [||];
+          metas  = [||];
           nids = 0;
         }
 
@@ -165,12 +157,24 @@ struct
         s.nids <- s.nids + 1;
         id
 
+
+    let new_gamma (s: t): int =
+        let id = Array.length s.gammas in
+        s.gammas <- Array.push (ref [||]) s.gammas;
+        id
+
+
+
     let is_valid_context (i: int) (s: t): bool =
         i < Array.length s.gammas
 
 
-    let empty_context (s: t): gamma =
-        s.gammas.(0)
+
+    let is_valid_meta (gam: int) (idx: int) (s: t): bool =
+        is_valid_context gam s
+        &&
+        idx < Array.length !(s.gammas.(gam))
+
 
 
     let rec execute (s: t): 'a =
@@ -184,48 +188,70 @@ struct
 
 
     let make_meta
-            (_: requirement)
+            (req: requirement)
             (i: int)            (* in context [i] *)
             (s: t)
         : int                   (* the id of the meta in the context *)
         =
         assert (is_valid_context i s);
-        assert false
+        let ni = Array.length !(s.gammas.(i))
+        and n  = Array.length s.metas
+        in
+        s.metas <-
+            Array.push {req; term = None; waitq = []} s.metas;
+        s.gammas.(i) :=
+            Array.push n !(s.gammas.(i));
+        ni
 
 
+    let get_meta (gam: int) (idx: int) (s: t): meta =
+        s.metas.(!(s.gammas.(gam)).(idx))
 
-    let is_filled (_: int) (_: int) (_: t): bool =
-        assert false
+
+    let is_filled (gam: int) (idx: int) (s: t): bool =
+        assert (is_valid_meta gam idx s);
+        (get_meta gam idx s).term <> None
 
 
-    let fill_term (gam: int) (meta: int) (s: t): term =
-        assert (is_filled gam meta s);
-        assert false
+    let fill_term (gam: int) (idx: int) (s: t): term =
+        assert (is_filled gam idx s);
+        match (get_meta gam idx s).term with
+        | None      -> assert false (* Illegal call *)
+        | Some term -> term
 
 
     let fill_meta
-            (_: int)                (* context id *)
-            (_: int)                (* id in the context *)
-            (_: term)
-            (_: t)
+            (gam: int)                (* context id *)
+            (idx: int)                (* id in the context *)
+            (term: term)
+            (s: t)
         : unit
         =
-        assert false
+        assert (not (is_filled gam idx s));
+        (get_meta gam idx s).term <- Some term
 
 
     let spawn (f: t -> unit) (s: t): unit =
         s.ready <- f :: s.ready
 
+
     let wait_meta
-            (_: int)
-            (_: int)
-            (_: term -> t -> unit) (_: t -> unit) (_: t)
+            (gam: int)
+            (idx: int)
+            (f: term -> t -> unit)
+            (err: t -> unit)
+            (s: t)
         : unit
         =
         (* If [meta] is instantiated then do the action [f term s].
-         * Otherwise push [f] and the error handler [e] onto the wait queue for
+         * Otherwise push [f] and the error handler [err] onto the wait queue for
          * [meta]. *)
-        assert false
+        let m = get_meta gam idx s in
+        match m.term with
+        | None ->
+            m.waitq <- (f, err) :: m.waitq
+        | Some term ->
+            f term s
 end
 
 
@@ -278,9 +304,10 @@ struct
         m s (fun g _ -> raise (Done g));
         try
             let _ = State.execute s in
-            assert false
-        with Done g -> Ok g
-           | Fail e -> Error e
+            assert false        (* shall never happen *)
+        with
+        | Done g -> Ok g
+        | Fail e -> Error e
 
 
     let fresh_id: int t =
@@ -288,8 +315,9 @@ struct
         k (State.fresh_id s) s
 
 
-    let new_gamma (_: int -> gamma): gamma t =
-        assert false
+    let new_gamma: int t =
+        fun s k ->
+        k (State.new_gamma s) s
 
 
     let wait_meta (gam: int) (meta: int) (f: term -> 'a t) (e: 'a t): 'a t =
@@ -512,13 +540,13 @@ struct
             (elab: t)
         : (t, Error.t) result
         =
-        let state = State.make elab in
         let mon =
             let open Mon in
+            let* gamma = Ecm.new_gamma elab in
             let* gamma =
                 fold_left
                     (fun gamma f -> f gamma)
-                    (State.empty_context state)
+                    gamma
                     fargs
             in
             let* _ = farg_type gamma tp in
@@ -528,5 +556,5 @@ struct
             | Some _ ->
                 assert false
         in
-        Mon.run mon state
+        Mon.run mon (State.make ())
 end
