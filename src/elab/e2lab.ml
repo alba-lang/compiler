@@ -58,7 +58,7 @@ struct
     type term
     type requirement (* required type or signature *)
 
-    type check_result =
+    type checked_term =
         | Checked of term
         | Rejected
         | Maybe
@@ -87,7 +87,7 @@ struct
 
 
 
-        let check (_: term) (_: requirement) (_: gamma): check_result M.t =
+        let check (_: term) (_: requirement) (_: gamma): checked_term M.t =
             assert false
 
         let prop (_: gamma): term M.t =
@@ -350,7 +350,7 @@ struct
         =
         match lst with
         | [] ->
-            assert false (* illegal call *)
+            assert false (* Illegal call *)
         | el :: lst ->
             let rec go accu = function
                 | [] -> return accu
@@ -360,6 +360,7 @@ struct
             in
             let* accu = start el in
             go accu lst
+
 
 
     let fold_left
@@ -395,7 +396,7 @@ struct
 
 
     type term =
-        (Ec.gamma -> Ec.term Mon.t) with_range
+        (Ec.gamma -> Ec.requirement -> Ec.term Mon.t) with_range
 
     type formal_argument =
         Econtext.gamma -> Econtext.gamma Mon.t
@@ -417,13 +418,6 @@ struct
 
 
 
-    let farg_type (gamma: Ec.gamma) ((_, f): term): Ec.term Mon.t =
-        let* req = Ecm.type_requirement gamma in
-        let* t   = f gamma in
-        let* res = Ecm.check t req gamma in
-        match res with
-        | _ ->
-            assert false (* nyi *)
 
 
     let range_of_names (names: Name.t located list) (): range =
@@ -440,6 +434,35 @@ struct
 
 
 
+    let checked_term
+            (rangef: unit -> range)
+            (f: Ec.gamma -> Ec.term Mon.t)
+        : term
+        =
+        let f gamma req =
+            let* t = f gamma in
+            let* t = Ecm.check t req gamma in
+            let open Ec in
+            match t with
+            | Checked t ->
+                Mon.return t
+            | _ ->
+                Mon.fail (Error.make
+                              rangef
+                              "expression has illegal type")
+        in
+        rangef, f
+
+
+
+
+
+
+    let farg_type (gamma: Ec.gamma) ((_, f): term): Ec.term Mon.t =
+        let* req = Ecm.type_requirement gamma in
+        f gamma req
+
+
 
 
 
@@ -450,23 +473,35 @@ struct
 
 
     let prop (range: range): term =
-        (fun () -> range),
-        Ecm.prop
+        checked_term (fun () -> range) Ecm.prop
+
+
 
 
 
     let any (range: range): term =
         (* nyi: universe term *)
-        (fun () -> range),
-        Ecm.any
+        checked_term (fun () -> range) Ecm.any
 
 
     let name_term (_: range) (_: Name.t): term =
         assert false
 
 
-    let application (_: term) (_: term list): term =
-        assert false
+    let application (_: term) (args: (bool * term) list): term =
+        let rangef () =
+            assert false
+        and go = function
+            | [] ->
+                assert false (* Illegal call *)
+            | [_] ->
+                assert false
+            | _ :: _ ->
+                assert false
+        in
+        rangef,
+        go args
+
 
 
     let formal_argument_simple
