@@ -79,11 +79,31 @@ struct
             M.return (assert false)
 
 
+        let requirement_of_type (_: term) (_: gamma): requirement M.t =
+            assert false
+
+        let function_requirement
+                (_: bool)           (* Implicit?     *)
+                (_: term)           (* Argument type *)
+                (_: requirement)    (* Requirement of the result *)
+                (_: gamma)
+            : requirement M.t
+            =
+            assert false
+
 
         let make_meta (_: requirement) (_: gamma): term M.t =
             (* Make a metavariables which satisfies a requirement *)
             assert false
 
+
+        let fill_meta (_: term) (_: term) (_: gamma): unit M.t =
+            (* Fill the metavariable [m] with the term [mt].
+
+               Precondition: The metavariables does not yet have any fill term
+               and the fill term satisfies the requirement.
+            *)
+            assert false
 
 
 
@@ -95,6 +115,12 @@ struct
 
         let any  (_: gamma): term M.t =
             M.return (assert false)
+
+
+        let apply (_: term) (_: term) (_: gamma): term M.t =
+            (* Apply the function term [f] to the argument [a]. *)
+            assert false
+
 
 
         let new_gamma (_: Globals.t): gamma M.t =
@@ -325,6 +351,9 @@ struct
         State.wait_meta gam meta (fun term s -> f term s k) (fun s -> e s k) s
 
 
+    let fill_meta (_: int) (_: int) (_: term): unit t =
+        assert false
+
     let next_tick (m: 'a t): 'a t =
         fun s k ->
         State.spawn (fun s -> m s k) s
@@ -431,6 +460,13 @@ struct
                 names
 
 
+    let range_of_pair (r1: unit -> range) (r2: unit -> range) (): range =
+        let p1, _  = r1 ()
+        and _,  p2 = r2 ()
+        in
+        (p1, p2)
+
+
 
 
 
@@ -464,6 +500,33 @@ struct
 
 
 
+    let apply ((rf, f): term) (implicit: bool) ((ra, arg): term): term =
+        range_of_pair rf ra,
+        fun gamma req ->
+            (* Make the two metavariables [?a: ?A] *)
+            let* atreq = Ecm.type_requirement gamma in
+            let* matp  = Ecm.make_meta atreq gamma in
+            let* areq  = Ecm.requirement_of_type matp gamma in
+            let* ma    = Ecm.make_meta areq gamma in
+            let* _ =
+                (* Spawn a task to elaborate the term [a] and fill the
+                 * corresponding hole. *)
+                Mon.spawn
+                    (
+                        let* a = arg gamma areq in
+                        Ecm.fill_meta ma a gamma
+                    )
+                    ()
+            in
+            (* Make the requirement for the function term *)
+            let* freq =
+                Ecm.function_requirement implicit matp req gamma
+            in
+            let* fterm = f gamma freq in
+            Ecm.apply fterm ma gamma
+
+
+
 
 
     (* ------------------------------------------------------------*)
@@ -477,30 +540,30 @@ struct
 
 
 
-
-
     let any (range: range): term =
         (* nyi: universe term *)
         checked_term (fun () -> range) Ecm.any
+
 
 
     let name_term (_: range) (_: Name.t): term =
         assert false
 
 
-    let application (_: term) (args: (bool * term) list): term =
-        let rangef () =
-            assert false
-        and go = function
+
+    let application (f: term) (args: (bool * term) list): term =
+        let rec go f = function
             | [] ->
                 assert false (* Illegal call *)
-            | [_] ->
-                assert false
-            | _ :: _ ->
-                assert false
+
+            | [implicit, a] ->
+                apply f implicit a
+
+            | (implicit, a) :: args ->
+                go (apply f implicit a) args
         in
-        rangef,
-        go args
+        go f args
+
 
 
 
