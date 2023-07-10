@@ -45,7 +45,7 @@ sig
     val float_term: range -> string -> term
     val tuple_term: range -> term list -> term
     val list_term:  range -> term list -> term
-    val application: term -> term list -> term
+    val application: term -> (bool * term) list -> term
     val parens_term: Position.t -> Position.t -> term -> term
     val implicit_argument: Position.t -> Position.t -> term -> term
 
@@ -610,15 +610,19 @@ struct
         paren_term ()
 
 
-    and argument (): E.term t =
-        atomic
+    and argument (): (bool * E.term) t =
+        let explicit = map (fun t -> false, t)
+        and implicit = map (fun t -> true, t)
+        in
+        explicit atomic
         </>
-        name_term
+        explicit name_term
         </>
-        parens_around E.parens_term term
+        explicit (parens_around E.parens_term term)
         </>
-        braces_around E.implicit_argument term
-        <?> "function argument"
+        implicit (braces_around E.implicit_argument term)
+        <?>
+        "function argument"
 
 
     and lambda_abstraction (): E.term t =

@@ -70,7 +70,7 @@ let list_last (lst: 'a list): 'a =
 
 let make_application_holes
         (_: term)
-        (_: term array)
+        (_: (bool * term) array)
     : (hole_id * hole_id array) BS.t
     =
     assert false
@@ -229,12 +229,12 @@ let list_term (_: range) (_: term list): term =
 
 
 
-let application (fterm: term) (args: term list): term =
+let application (fterm: term) (args: (bool * term) list): term =
     (* Note [Function Application] *)
     assert (args <> []);
     let rangef () =
         fterm.rangef () |> fst,
-        (list_last args).rangef () |> snd
+        (snd (list_last args)).rangef () |> snd
     in
     let build hole =
         let args  = Array.of_list args in
@@ -251,7 +251,7 @@ let application (fterm: term) (args: term list): term =
                          build_task_wo_id
                              ReadyQ
                              argholes.(i)
-                             args.(i).build)
+                             (snd args.(i)).build)
                     (return ())
             in
             let* fid =
