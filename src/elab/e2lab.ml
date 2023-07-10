@@ -15,12 +15,12 @@ type 'a located = range * 'a
 module Error =
 struct
     type t = {
-        rangef: unit -> range;
-        tag:    string;
+        range: range;
+        tag:   string;
     }
 
-    let make (rangef: unit -> range) (tag: string): t =
-        {rangef; tag}
+    let make (range: range) (tag: string): t =
+        {range; tag}
 end
 
 
@@ -416,16 +416,13 @@ end
 
 module Elab =
 struct
-    type 'a with_range =
-        (unit -> range) * 'a
-
     module Ec = Econtext
 
     module Ecm = Econtext.Monadic (Mon)
 
 
     type term =
-        (Ec.gamma -> Ec.requirement -> Ec.term Mon.t) with_range
+        (Ec.gamma -> Ec.requirement -> Ec.term Mon.t) located
 
     type formal_argument =
         Econtext.gamma -> Econtext.gamma Mon.t
@@ -449,7 +446,7 @@ struct
 
 
 
-    let range_of_names (names: Name.t located list) (): range =
+    let range_of_names (names: Name.t located list): range =
         match names with
         | [] -> assert false (* Illegal call *)
         | ((pos1, pos2), _) :: names ->
@@ -460,18 +457,11 @@ struct
                 names
 
 
-    let range_of_pair (r1: unit -> range) (r2: unit -> range) (): range =
-        let p1, _  = r1 ()
-        and _,  p2 = r2 ()
-        in
-        (p1, p2)
-
-
 
 
 
     let checked_term
-            (rangef: unit -> range)
+            (range: range)
             (f: Ec.gamma -> Ec.term Mon.t)
         : term
         =
@@ -484,10 +474,10 @@ struct
                 Mon.return t
             | _ ->
                 Mon.fail (Error.make
-                              rangef
+                              range
                               "expression has illegal type")
         in
-        rangef, f
+        range, f
 
 
 
@@ -501,7 +491,7 @@ struct
 
 
     let apply ((rf, f): term) (implicit: bool) ((ra, arg): term): term =
-        range_of_pair rf ra,
+        Position.merge rf ra,
         fun gamma req ->
             (* Make the two metavariables [?a: ?A] *)
             let* atreq = Ecm.type_requirement gamma in
@@ -536,13 +526,13 @@ struct
 
 
     let prop (range: range): term =
-        checked_term (fun () -> range) Ecm.prop
+        checked_term range Ecm.prop
 
 
 
     let any (range: range): term =
         (* nyi: universe term *)
-        checked_term (fun () -> range) Ecm.any
+        checked_term range Ecm.any
 
 
 
