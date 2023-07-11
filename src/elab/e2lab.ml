@@ -120,6 +120,20 @@ struct
             M.return (assert false)
 
 
+
+        let find (_: Name.t) (_: requirement) (_: gamma): term option M.t =
+            (* Use requirement only to resolve ambiguities. No type checking is
+               done.
+
+               nyi: The result type needs to be refined. Possible cases:
+
+               - Name cannot be found. Return similar names.
+               - One or more entries found, but none matches the requirement.
+               Return the terms with types.
+            *)
+            assert false
+
+
         let apply (_: term) (_: term) (_: gamma): term M.t =
             (* Apply the function term [f] to the argument [a].
 
@@ -464,17 +478,13 @@ struct
                 names
 
 
-
-
-
-    let checked_ec_term
-            (range: range)
-            (f: Ec.gamma -> Ec.term Mon.t)
-            (gamma: Ec.gamma)
-            (req: Ec.requirement)
+    let check_ec_term
+        (range: range)
+        (t: Ec.term)
+        (req: Ec.requirement)
+        (gamma: Ec.gamma)
         : Ec.term Mon.t
         =
-        let* t = f gamma in
         let* t = Ecm.check t req gamma in
         let open Ec in
         match t with
@@ -488,14 +498,14 @@ struct
 
 
 
-
-    let checked_term
+    let check_term
             (range: range)
             (f: Ec.gamma -> Ec.term Mon.t)
         : term
         =
         let f gamma req =
-            checked_ec_term range f gamma req
+            let* t = f gamma in
+            check_ec_term range t req gamma
         in
         range, f
 
@@ -520,18 +530,27 @@ struct
 
 
     let prop (range: range): term =
-        checked_term range Ecm.prop
+        check_term range Ecm.prop
 
 
 
     let any (range: range): term =
         (* nyi: universe term *)
-        checked_term range Ecm.any
+        check_term range Ecm.any
 
 
 
-    let name_term (_: range) (_: Name.t): term =
-        assert false
+    let name_term (range: range) (name: Name.t): term =
+        range,
+        fun gamma req ->
+            let* t = Ecm.find name req gamma
+            in
+            match t with
+            | None ->
+                Mon.fail (Error.make range "not found")
+
+            | Some t ->
+                check_ec_term range t req gamma
 
 
 
@@ -578,7 +597,8 @@ struct
                requirement. This check might include the insertion of additional
                implicit arguments.
             *)
-            checked_ec_term range_fa (Ecm.apply fterm ma) gamma req
+            let* fa = Ecm.apply fterm ma gamma in
+            check_ec_term range_fa fa req gamma
 
 
 
