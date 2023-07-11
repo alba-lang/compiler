@@ -144,6 +144,7 @@ struct
 
 
         let arrow (_: term) (_: term) (_: gamma): term M.t =
+            (* Make the type term [A -> B] *)
             assert false
 
 
@@ -445,8 +446,10 @@ struct
     module Ecm = Econtext.Monadic (Mon)
 
 
-    type term =
-        (Ec.gamma -> Ec.requirement -> Ec.term Mon.t) located
+    type termf = Ec.gamma -> Ec.requirement -> Ec.term Mon.t
+
+    type term  = termf located
+
 
     type formal_argument =
         Econtext.gamma -> Econtext.gamma Mon.t
@@ -523,6 +526,44 @@ struct
 
 
 
+    let applyf (range: range) (f: termf) (implicit: bool) (arg: termf): termf =
+        fun gamma req ->
+
+        (* Make the two metavariables [?a: ?A] *)
+        let* atreq = Ecm.type_requirement gamma in
+        let* matp  = Ecm.make_meta atreq gamma in
+        let* areq  = Ecm.requirement_of_type matp gamma in
+        let* ma    = Ecm.make_meta areq gamma in
+        let* _ =
+            (* Spawn a task to elaborate the term [a] and fill the
+             * corresponding hole. *)
+            Mon.spawn
+                (
+                    let* a = arg gamma areq in
+                    Ecm.fill_meta ma a gamma
+                )
+                ()
+        in
+        (* Make the requirement for the function term *)
+        let* freq =
+            Ecm.function_requirement implicit matp req gamma
+        in
+        let* fterm = f gamma freq in
+        (* Check that the application satisfies its requirement.
+
+           This extra check is neccessary, because the result type of [f ?a]
+           might depend on the argument [a|. The elaboration of [f] does not
+           have [?a] available, only its type [?A]. I.e. [f] satisfies the
+           requirement of being a function accepting an argument of type
+           [?A]. It remains to be checked that [f ?a] satisfies its
+           requirement. This check might include the insertion of additional
+           implicit arguments.
+        *)
+        let* fa = Ecm.apply fterm ma gamma in
+        check_ec_term range fa req gamma
+
+
+
 
     let arrow ((r1,f1): term) ((r2,f2): term): term =
         let range = Position.merge r1 r2
@@ -579,58 +620,45 @@ struct
         t
 
 
-    let apply ((rf, f): term) (implicit: bool) ((ra, arg): term): term =
-        let range_fa = Position.merge rf ra
+    let apply ((rf, f): term) (implicit: bool) ((rarg, arg): term): term =
+        let range = Position.merge rf rarg
         in
-        range_fa,
-        fun gamma req ->
-            (* Make the two metavariables [?a: ?A] *)
-            let* atreq = Ecm.type_requirement gamma in
-            let* matp  = Ecm.make_meta atreq gamma in
-            let* areq  = Ecm.requirement_of_type matp gamma in
-            let* ma    = Ecm.make_meta areq gamma in
-            let* _ =
-                (* Spawn a task to elaborate the term [a] and fill the
-                 * corresponding hole. *)
-                Mon.spawn
-                    (
-                        let* a = arg gamma areq in
-                        Ecm.fill_meta ma a gamma
-                    )
-                    ()
-            in
-            (* Make the requirement for the function term *)
-            let* freq =
-                Ecm.function_requirement implicit matp req gamma
-            in
-            let* fterm = f gamma freq in
-            (* Check that the application satisfies its requirement.
-
-               This extra check is neccessary, because the result type of [f ?a]
-               might depend on the argument [a|. The elaboration of [f] does not
-               have [?a] available, only its type [?A]. I.e. [f] satisfies the
-               requirement of being a function accepting an argument of type
-               [?A]. It remains to be checked that [f ?a] satisfies its
-               requirement. This check might include the insertion of additional
-               implicit arguments.
-            *)
-            let* fa = Ecm.apply fterm ma gamma in
-            check_ec_term range_fa fa req gamma
+        range,
+        applyf range f implicit arg
 
 
 
     let binary_expression
-            (t1:   term)
-            (_:    range)
+            ((r1,t1f) as t1:   term)
+            (r_op: range)
             (name: Name.t)
-            (t2:   term)
+            ((r2,t2f) as t2:   term)
         : term
         =
         assert (Name.is_operator name);
         if Name.is_arrow name then
             arrow t1 t2
         else
-            assert false
+            let range = Position.merge r1 r2 in
+            let (_, op)  = name_term r_op name in
+            let left     = applyf (Position.merge r1 r_op) op false t1f in
+            let right    = applyf range left false t2f in
+            range, right
+
+
+
+    let unary_expression
+            (r_op: range)
+            (name: Name.t)
+            ((r,tf): term)
+        : term
+        =
+        assert (Name.is_operator name);
+        let range = Position.merge r_op r in
+        let (_, op)  = name_term r_op name in
+        let res      = applyf range op false tf in
+        range, res
+
 
 
 
