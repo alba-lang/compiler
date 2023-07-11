@@ -108,6 +108,9 @@ struct
 
 
         let check (_: term) (_: requirement) (_: gamma): checked_term M.t =
+            (* Check the term [t] against its requirement [req]. The check might
+               include the insertion of implicit arguments.
+            *)
             assert false
 
         let prop (_: gamma): term M.t =
@@ -118,7 +121,11 @@ struct
 
 
         let apply (_: term) (_: term) (_: gamma): term M.t =
-            (* Apply the function term [f] to the argument [a]. *)
+            (* Apply the function term [f] to the argument [a].
+
+               Precondition: [f] is a function accepting an argument with the
+               type of [a].
+            *)
             assert false
 
 
@@ -460,22 +467,35 @@ struct
 
 
 
+    let checked_ec_term
+            (range: range)
+            (f: Ec.gamma -> Ec.term Mon.t)
+            (gamma: Ec.gamma)
+            (req: Ec.requirement)
+        : Ec.term Mon.t
+        =
+        let* t = f gamma in
+        let* t = Ecm.check t req gamma in
+        let open Ec in
+        match t with
+        | Checked t ->
+            Mon.return t
+        | _ ->
+            Mon.fail (Error.make
+                          range
+                          "expression has illegal type")
+
+
+
+
+
     let checked_term
             (range: range)
             (f: Ec.gamma -> Ec.term Mon.t)
         : term
         =
         let f gamma req =
-            let* t = f gamma in
-            let* t = Ecm.check t req gamma in
-            let open Ec in
-            match t with
-            | Checked t ->
-                Mon.return t
-            | _ ->
-                Mon.fail (Error.make
-                              range
-                              "expression has illegal type")
+            checked_ec_term range f gamma req
         in
         range, f
 
@@ -524,7 +544,9 @@ struct
 
 
     let apply ((rf, f): term) (implicit: bool) ((ra, arg): term): term =
-        Position.merge rf ra,
+        let range_fa = Position.merge rf ra
+        in
+        range_fa,
         fun gamma req ->
             (* Make the two metavariables [?a: ?A] *)
             let* atreq = Ecm.type_requirement gamma in
@@ -546,7 +568,18 @@ struct
                 Ecm.function_requirement implicit matp req gamma
             in
             let* fterm = f gamma freq in
-            Ecm.apply fterm ma gamma
+            (* Check that the application satisfies its requirement.
+
+               This extra check is neccessary, because the result type of [f ?a]
+               might depend on the argument [a|. The elaboration of [f] does not
+               have [?a] available, only its type [?A]. I.e. [f] satisfies the
+               requirement of being a function accepting an argument of type
+               [?A]. It remains to be checked that [f ?a] satisfies its
+               requirement. This check might include the insertion of additional
+               implicit arguments.
+            *)
+            checked_ec_term range_fa (Ecm.apply fterm ma) gamma req
+
 
 
 
