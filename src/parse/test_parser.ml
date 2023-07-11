@@ -40,7 +40,7 @@ module Elaborator = struct
     let float_term _ _: term = ()
     let tuple_term _ _: term = ()
     let list_term  _ _: term = ()
-    let application _ _: term = ()
+    let apply _ _ _: term = ()
     let parens_term _ _ _: term = ()
     let implicit_argument _ _ _: term = ()
 

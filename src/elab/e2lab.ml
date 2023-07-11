@@ -490,32 +490,6 @@ struct
 
 
 
-    let apply ((rf, f): term) (implicit: bool) ((ra, arg): term): term =
-        Position.merge rf ra,
-        fun gamma req ->
-            (* Make the two metavariables [?a: ?A] *)
-            let* atreq = Ecm.type_requirement gamma in
-            let* matp  = Ecm.make_meta atreq gamma in
-            let* areq  = Ecm.requirement_of_type matp gamma in
-            let* ma    = Ecm.make_meta areq gamma in
-            let* _ =
-                (* Spawn a task to elaborate the term [a] and fill the
-                 * corresponding hole. *)
-                Mon.spawn
-                    (
-                        let* a = arg gamma areq in
-                        Ecm.fill_meta ma a gamma
-                    )
-                    ()
-            in
-            (* Make the requirement for the function term *)
-            let* freq =
-                Ecm.function_requirement implicit matp req gamma
-            in
-            let* fterm = f gamma freq in
-            Ecm.apply fterm ma gamma
-
-
 
 
 
@@ -541,19 +515,38 @@ struct
 
 
 
-    let application (f: term) (args: (bool * term) list): term =
-        let rec go f = function
-            | [] ->
-                assert false (* Illegal call *)
+    let parens_term (_: Position.t) (_: Position.t) (t: term): term =
+        t
 
-            | [implicit, a] ->
-                apply f implicit a
 
-            | (implicit, a) :: args ->
-                go (apply f implicit a) args
-        in
-        go f args
+    let implicit_argument(_: Position.t) (_: Position.t) (t: term): term =
+        t
 
+
+    let apply ((rf, f): term) (implicit: bool) ((ra, arg): term): term =
+        Position.merge rf ra,
+        fun gamma req ->
+            (* Make the two metavariables [?a: ?A] *)
+            let* atreq = Ecm.type_requirement gamma in
+            let* matp  = Ecm.make_meta atreq gamma in
+            let* areq  = Ecm.requirement_of_type matp gamma in
+            let* ma    = Ecm.make_meta areq gamma in
+            let* _ =
+                (* Spawn a task to elaborate the term [a] and fill the
+                 * corresponding hole. *)
+                Mon.spawn
+                    (
+                        let* a = arg gamma areq in
+                        Ecm.fill_meta ma a gamma
+                    )
+                    ()
+            in
+            (* Make the requirement for the function term *)
+            let* freq =
+                Ecm.function_requirement implicit matp req gamma
+            in
+            let* fterm = f gamma freq in
+            Ecm.apply fterm ma gamma
 
 
 

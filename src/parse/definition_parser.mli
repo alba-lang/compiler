@@ -44,7 +44,7 @@ sig
     val float_term: range -> string -> term
     val tuple_term: range -> term list -> term
     val list_term:  range -> term list -> term
-    val application: term -> (bool * term) list -> term
+    val apply: term -> bool -> term -> term
     val parens_term: Position.t -> Position.t -> term -> term
     val implicit_argument: Position.t -> Position.t -> term -> term
 

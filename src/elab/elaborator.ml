@@ -228,6 +228,9 @@ let list_term (_: range) (_: term list): term =
     assert false
 
 
+let apply (_: term) (_: bool) (_: term): term =
+    assert false
+
 
 let application (fterm: term) (args: (bool * term) list): term =
     (* Note [Function Application] *)
@@ -266,6 +269,9 @@ let application (fterm: term) (args: (bool * term) list): term =
     in
     make_term rangef build
 
+
+
+let _ = application
 
 
 

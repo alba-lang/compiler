@@ -45,7 +45,7 @@ sig
     val float_term: range -> string -> term
     val tuple_term: range -> term list -> term
     val list_term:  range -> term list -> term
-    val application: term -> (bool * term) list -> term
+    val apply: term -> bool -> term -> term
     val parens_term: Position.t -> Position.t -> term -> term
     val implicit_argument: Position.t -> Position.t -> term -> term
 
@@ -600,14 +600,22 @@ struct
 
     and application (): E.term t =
         let* f = function_term () in
-        let* args = many0 (argument ()) in
-        return (E.application f args)
+        arguments f
 
 
     and function_term (): E.term t =
         name_term
         </>
         paren_term ()
+
+
+    and arguments (f: E.term): E.term t =
+        (
+            let* (implicit, arg) = argument () in
+            arguments (E.apply f implicit arg)
+        )
+        </>
+        return f
 
 
     and argument (): (bool * E.term) t =
