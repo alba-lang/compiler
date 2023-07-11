@@ -17,6 +17,17 @@ let is_wildcard ((i, _): t): bool =
     i = Wildcard
 
 
+let is_operator ((i, _): t): bool =
+    match i with
+    | Operator _ -> true
+    | _          -> false
+
+
+let is_arrow ((_, s): t): bool =
+    s = "->"
+
+
+
 let normal str = Normal, str
 
 let operator str =

@@ -143,6 +143,9 @@ struct
             assert false
 
 
+        let arrow (_: term) (_: term) (_: gamma): term M.t =
+            assert false
+
 
         let new_gamma (_: Globals.t): gamma M.t =
             M.(
@@ -521,6 +524,20 @@ struct
 
 
 
+    let arrow ((r1,f1): term) ((r2,f2): term): term =
+        let range = Position.merge r1 r2
+        in
+        let f gamma req =
+            let* r = Ecm.type_requirement gamma in
+            let* t1 = f1 gamma r in
+            let* t2 = f2 gamma r in
+            let* arr = Ecm.arrow t1 t2 gamma in
+            check_ec_term range arr req gamma
+        in
+        range,
+        f
+
+
 
 
     (* ------------------------------------------------------------*)
@@ -600,6 +617,20 @@ struct
             let* fa = Ecm.apply fterm ma gamma in
             check_ec_term range_fa fa req gamma
 
+
+
+    let binary_expression
+            (t1:   term)
+            (_:    range)
+            (name: Name.t)
+            (t2:   term)
+        : term
+        =
+        assert (Name.is_operator name);
+        if Name.is_arrow name then
+            arrow t1 t2
+        else
+            assert false
 
 
 
