@@ -148,6 +148,15 @@ struct
             assert false
 
 
+        let make_pi (_: term) (_: gamma) (_: gamma): term M.t =
+            (* Use the result type [res_tp] valid in [gamma2] and make a product
+               term valid in [gamma]. Replace all metavariables which are not
+               valid in [gamma] by metavariables valid in [gamma].
+             *)
+            assert false
+
+
+
         let new_gamma (_: Globals.t): gamma M.t =
             M.(
                 let* _ = new_gamma in
@@ -286,6 +295,10 @@ struct
         s.ready <- f :: s.ready
 
 
+    let run_ready (_: t): unit =
+        assert false
+
+
     let wait_meta
             (gam: int)
             (idx: int)
@@ -384,12 +397,18 @@ struct
         State.spawn (fun s -> m s k) s
 
 
-    let spawn (m: unit t) (a: 'a) : 'a t =
+    let spawn (m: unit t) (a: 'a): 'a t =
         fun s k ->
         State.spawn
             (fun s ->
                  m s (fun () _ -> ()))
             s;
+        k a s
+
+
+    let run_ready (a: 'a): 'a t =
+        fun s k ->
+        State.run_ready s;
         k a s
 
 
@@ -581,6 +600,7 @@ struct
 
 
 
+
     (* ------------------------------------------------------------*)
     (* Functions to satisfy module type [ELABORATOR]               *)
     (* ------------------------------------------------------------*)
@@ -701,12 +721,26 @@ struct
 
 
     let product_expression
-            (_: Position.t)
-            (_: formal_argument list)
-            (_: term) (* result type *)
+            (p1: Position.t)
+            (fargs: formal_argument list)
+            (((_,p2), fres): term) (* result type *)
         : term
         =
-        assert false
+        let range = (p1, p2) in
+        let f gamma pi_req =
+            let* gamma2 =
+                Mon.fold_left
+                    (fun gamma f -> f gamma)
+                    gamma
+                    fargs
+            in
+            let* tp_req = Ecm.type_requirement gamma2 in
+            let* res_tp = fres gamma2 tp_req in
+            let* pi     = Ecm.make_pi res_tp gamma2 gamma in
+            let* _      = Mon.run_ready () in
+            check_ec_term range pi pi_req gamma
+        in
+        range, f
 
 
 
