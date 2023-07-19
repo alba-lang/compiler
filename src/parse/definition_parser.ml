@@ -495,6 +495,8 @@ struct
         bracket_empty (to_name Name.bracket_empty)
         </>
         (
+            let expect = {|"(operator)"|}
+            in
             backtrack
                 (
                     operator (to_name Name.operator)
@@ -502,8 +504,9 @@ struct
                     comma (to_name Name.operator)
                     |> const
                     |> parens_around (fun _ _ x -> x)
+                    <?> expect
                 )
-                "operator"
+                expect
         )
 
 
