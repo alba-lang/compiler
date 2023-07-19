@@ -141,7 +141,22 @@ let success_tests: string array =
 
         {|f: all (x: A): R := \ x := e x|};
 
-        {|Predicate: Any -> Any := \ A := A -> Prop|}
+        {|Predicate: Any -> Any := \ A := A -> Prop|};
+
+        {|
+            Endorelation: Any -> Any :=
+                \ A := A -> A -> Prop
+
+            (|>) {A: Any} {F: A -> Any} (a: A) (f: all x: F x): F a
+            := f a
+
+            zip {A B C: Any} {n: Nat}
+                : (A -> B -> C) -> Vec A n -> Vec B n -> Vec C n
+
+            (=) {A: Any}: A -> A -> Prop
+
+            test: Prop := 1 = "Hello"
+        |}
     |]
 
 
