@@ -1,16 +1,10 @@
-module type MON =
+module type MONAD =
 sig
-    type term
-    type gamma
     type 'a t
 
     val return:   'a -> 'a t
     val (>>=):    'a t -> ('a -> 'b t) -> 'b t
     val ( let* ): 'a t -> ('a -> 'b t) -> 'b t
-
-    val new_gamma: (int -> gamma) -> gamma t
-    val new_hole:  term -> gamma -> int t
-    val fill_hole: int -> term -> gamma -> unit t
 end
 
 

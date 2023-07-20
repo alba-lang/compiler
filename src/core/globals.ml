@@ -7,6 +7,8 @@ struct
     type t = {
         name: string;
     }
+
+    let make name = {name}
 end
 
 
@@ -26,11 +28,26 @@ struct
         package: int;
         defs:    Entry.t Rb_array.t
     }
+
+    let make name package =
+        {
+            name;
+            package;
+            defs = Rb_array.empty;
+        }
 end
 
 
 type t = {
     packages: Package.t Rb_array.t;
     modules:  Module.t  Rb_array.t;
+    current:  int;          (* current module *)
 }
 
+
+let make (): t =
+    {
+        packages = Rb_array.(push Package.(make "alba.core") empty);
+        modules  = Rb_array.(push Module.(make "core" 0) empty);
+        current  = 0;
+    }

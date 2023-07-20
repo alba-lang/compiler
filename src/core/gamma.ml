@@ -2,6 +2,21 @@ open Fmlib_std
 open Std
 
 
+
+type term2 = {
+    tid:  int;
+    tgid: int;
+    term: Term.t;
+    req:  req;
+}
+and req = {
+    rid:  int;
+    rgid: int;
+    rtyp: term2 option;
+    sign: Sign.t;
+}
+
+
 type term    = int  *  Term.t  *  Term.tp
 type fterm   = int  *  Term.t  *  Term.tp  *  Term.tp
 type equiv   = int  *  Term.t  *  Term.t
