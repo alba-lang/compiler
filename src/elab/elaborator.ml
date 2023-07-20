@@ -5,31 +5,123 @@ module Position = Fmlib_parse.Position
 module Pretty   = Fmlib_pretty.Print
 
 
+module M   = Monad.Make (struct type t = Checker.globals end)
+
 module Ec  = Checker
-module Ecm = Checker.Make (Monad)
+module Ecm = Checker.Make (M)
 
 
 type range = Position.range
 type 'a located = range * 'a
 
 
+let ( let* ) = M.( let* )
+
+let return = M.return
+
+
+
+
+
+(* Types
+   ================================================================================
+ *)
+
 type termf =
-    Ec.gamma -> Ec.req -> Ec.term Monad.t
+    Ec.gamma -> Ec.req -> Ec.term M.t
 
 
 type term =
     termf located
 
 
+type formal_argument =
+    Ec.gamma -> Ec.gamma M.t
+
+
 type universe_term
 
-type formal_argument
 
 type error = Error.t
 
 
-type t =
-    Checker.globals
+type t = {
+    globals: Checker.globals;
+}
+
+
+
+
+
+
+
+
+
+
+(* Helper functions
+   ================================================================================
+ *)
+
+
+
+
+let nyi (range: range) (s: string): 'a M.t =
+    M.fail (
+        Error.make
+            range
+            "not yet implemented"
+            Pretty.(text "<" <+> text s <+> text "> " <+>
+                    text "is not yet implemented")
+    )
+
+
+
+
+let make_type ((_, f): term) (gamma: Ec.gamma): Ec.term M.t =
+    M.(
+        let* req = Ecm.type_requirement gamma in
+        f gamma req
+    )
+
+
+
+
+
+let check_ec_term
+        (range: range)
+        (t:     Ec.term)
+        (req:   Ec.req)
+        (gamma: Ec.gamma)
+    : Ec.term M.t
+    =
+    let* t = Ecm.check t req gamma in
+    match t with
+    | Some t ->
+        return t
+    | _ ->
+        M.fail (Error.make
+                      range
+                      "expression has illegal type"
+                      (assert false))
+
+
+
+
+let check_term
+        (range: range)
+        (f: Ec.gamma -> Ec.term M.t)
+    : term
+    =
+    let f gamma req =
+        let* t = f gamma in
+        check_ec_term range t req gamma
+    in
+    range, f
+
+
+
+
+
 
 
 
@@ -70,11 +162,13 @@ let prop (_: range): term =
 
 
 
-let any (range: range) (_: universe_term option): term =
-    let f _ _ =
-        Monad.fail (Error.make range "not yet implemented" Pretty.empty)
-    in
-    range, f
+let any (range: range) (ut: universe_term option): term =
+    match ut with
+    | Some _ ->
+        range, (fun _ _ -> nyi range "universe level")
+
+    | None ->
+        check_term range Ecm.any
 
 
 
@@ -188,16 +282,37 @@ let lambda_expression
 
 
 let add_definition
-        ((range, _): Name.t located)
-        (_: formal_argument list)       (* possibly empty *)
-        (_: term)                       (* result type    *)
-        (_: term option)                (* body           *)
-        (_: t)
+        ((_, _): Name.t located)
+        (fargs: formal_argument list)         (* possibly empty *)
+        (rtp: term option)                    (* result type    *)
+        (bdy: term option)                    (* body           *)
+        (elab: t)
     : (t, error) result
     =
-    Error (Error.make range "not yet implemented" Pretty.empty)
+    assert (fargs = []); (* nyi *)
+
+    let mon =
+        let open M in
+        let* gamma = Ecm.empty_gamma elab.globals in
+        match rtp, bdy with
+        | None, None ->
+            assert false        (* cannot happen, must be syntax error *)
+
+        | Some ((range, _) as tp), None ->
+            let* _ = make_type tp gamma in
+            nyi range "Declaration without body"
+
+        | None,   Some (range, _) ->
+            nyi range "Definition without result type"
+
+        | Some (range, _), Some _ ->
+            nyi range "Definition with result type"
+    in
+    Result.map
+        (fun globals -> {globals})
+        (M.run mon (State.make ()))
 
 
 
 let make (): t =
-    Checker.make_globals ()
+    {globals = Checker.make_globals ()}

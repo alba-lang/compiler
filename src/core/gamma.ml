@@ -28,6 +28,7 @@ type fterm_error =
 type t = {
     id: int;
     previous: t option;
+    globals: Globals.t;
     content: Term.gen_binder Rb_array.t;
     map: int Name_map.t;
 }
@@ -43,10 +44,11 @@ let length (g: t): int =
     Rb_array.length g.content
 
 
-let empty (id: int) : t =
+let empty (id: int) (globals: Globals.t) : t =
     {
         id;
         previous = None;
+        globals;
         content  = Rb_array.empty;
         map      = Name_map.empty;
     }
@@ -57,11 +59,11 @@ let empty (id: int) : t =
 
 let push_var (new_id: int) (info: Info.Bind.t) ((id, t, _): term) (g: t): t =
     assert (id = g.id);
-    {
-        id       = new_id;
-        previous = Some g;
-        content  = Rb_array.push (info, t, None) g.content;
-        map      = Name_map.add (Info.Bind.name info) (length g) g.map;
+    { g with
+      id       = new_id;
+      previous = Some g;
+      content  = Rb_array.push (info, t, None) g.content;
+      map      = Name_map.add (Info.Bind.name info) (length g) g.map;
     }
 
 
