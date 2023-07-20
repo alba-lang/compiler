@@ -89,7 +89,7 @@ sig
     val add_definition:
             Name.t located
             -> formal_argument list
-            -> term             (* result type *)
+            -> term option      (* result type *)
             -> term option      (* body *)
             -> t
             -> (t, error) result

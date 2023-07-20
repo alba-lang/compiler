@@ -133,6 +133,8 @@ let success_tests: string array =
 
         "f: T := g (,) (+) [] () ((,) a b)";
 
+        "f := 1 + 3";
+
         "f: T := [1,2,3,4]";
 
         "f: T := (1,2,3,4)";
@@ -186,6 +188,12 @@ let failure_tests: (string * string * int * int) array =
         "associating relational operators",
         "t:T :=\n a <= b < c", 1, 10;
                (*01234567890 *)
+
+        "declaration withtout result type",
+        "f", 0, 1;
+
+        "declaration withtout result type",
+        "f (A: Any)", 0, 10;
     |]
 
 

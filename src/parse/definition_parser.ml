@@ -91,7 +91,7 @@ sig
     val add_definition:
             Name.t located
             -> formal_argument list
-            -> term             (* result type *)
+            -> term option      (* result type *)
             -> term option      (* body *)
             -> t
             -> (t, error) result
@@ -724,14 +724,20 @@ struct
     let top_definition (): unit t =
         let* name = get_name (fun range name -> range, name) in
         let* fargs, rtp =
-            signature ()
-            <?> "type signature i.e. zero or more formal arguments and a
-                return type"
-            |> indent 1
+            indent 1 (
+                let* fargs = formal_arguments () in
+                let* rtp   = optional (result_type ()) in
+                return (fargs,rtp)
+            )
         in
-        let* bdy = function_body () |> optional
-        in
-        elaborate (E.add_definition name fargs rtp bdy)
+        match rtp with
+        | None ->
+            let* bdy = function_body () in
+            elaborate (E.add_definition name fargs None (Some bdy))
+        | Some _ as rtp ->
+            let* bdy = optional (function_body ()) in
+            elaborate (E.add_definition name fargs rtp bdy)
+
 
 
     let adt_definition (): unit t =
