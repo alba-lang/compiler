@@ -112,6 +112,17 @@ struct
         | Parse of range * string * string
         | Elab  of Semantic.t
 
+
+    let is_elab: t -> bool = function
+        | Parse _ -> false
+        | Elab  _ -> true
+
+
+    let elab: t -> Semantic.t = function
+        | Parse _ -> assert false (* Illegal call *)
+        | Elab e  -> e
+
+
     let to_range: t -> range = function
         | Parse (range, _, _) ->
             range
@@ -775,4 +786,10 @@ struct
 
     let doc_of_semantic (e: Error.t): Pretty.doc =
         Error.to_doc e
+
+    let is_elab_error (e: Error.t): bool =
+        Error.is_elab e
+
+    let elab_error (e: Error.t): Semantic.t =
+        Error.elab e
 end

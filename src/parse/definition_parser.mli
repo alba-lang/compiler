@@ -107,6 +107,8 @@ sig
 
     val to_range: t -> range
     val to_doc: t -> doc
+    val is_elab: t -> bool
+    val elab: t -> Semantic.t
 end
 
 
@@ -127,4 +129,8 @@ sig
     val range_of_semantic: semantic -> range
 
     val doc_of_semantic: semantic -> doc
+
+    val is_elab_error: semantic -> bool
+
+    val elab_error: semantic -> Semantic.t
 end
