@@ -40,8 +40,17 @@ let index (g: t ): int =
     g.id
 
 
+
+
 let length (g: t): int =
     Rb_array.length g.content
+
+
+
+
+let globals (g: t): Globals.t =
+    g.globals
+
 
 
 let empty (id: int) (globals: Globals.t) : t =

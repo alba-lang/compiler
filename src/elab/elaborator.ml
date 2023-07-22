@@ -10,6 +10,8 @@ module M   = Monad.Make (struct type t = Checker.globals end)
 module Ec  = Checker
 module Ecm = Checker.Make (M)
 
+module Listm = Fmlib_std.List.Monadic (M)
+
 
 type range = Position.range
 type 'a located = range * 'a
@@ -248,12 +250,26 @@ let formal_argument_simple (_: range) (_: Name.t): formal_argument =
 
 
 let formal_argument
-        (_: bool)                       (* implicit? *)
-        (_: Name.t located list)        (* nonempty group of variables *)
-        (_: term option)                (* type of the group *)
+        (implicit: bool)                 (* implicit? *)
+        (names: Name.t located list)     (* nonempty group of variables *)
+        (tp: term option)                (* type of the group *)
     : formal_argument
     =
-    assert false
+    assert (names <> []);
+    fun g ->
+        let* tp =
+            match tp with
+            | None ->
+                assert false (* nyi *)
+            | Some tp ->
+                make_type tp g
+        in
+        Listm.fold_left
+            (fun (_, n) g ->
+                 Ecm.push_variable implicit n tp g
+            )
+            names
+            g
 
 
 
@@ -282,7 +298,7 @@ let lambda_expression
 
 
 let add_definition
-        ((_, _): Name.t located)
+        ((_, name): Name.t located)
         (fargs: formal_argument list)         (* possibly empty *)
         (rtp: term option)                    (* result type    *)
         (bdy: term option)                    (* body           *)
@@ -293,14 +309,40 @@ let add_definition
 
     let mon =
         let open M in
-        let* gamma = Ecm.empty_gamma elab.globals in
+
+        (* Create an empty context *)
+        let* gamma =
+            Ecm.empty_gamma elab.globals
+        in
+
+        (* Push formal arguments into the context *)
+        let* gamma =
+            Listm.fold_left
+                (fun farg g -> farg g)
+                fargs
+                gamma
+        in
+        let nargs = Ec.gamma_length gamma
+        in
+
+        (* Elaborate the result type and the body *)
         match rtp, bdy with
         | None, None ->
-            assert false        (* cannot happen, must be syntax error *)
+            assert false    (* cannot happen, must be syntax error *)
 
         | Some ((range, _) as tp), None ->
-            let* _ = make_type tp gamma in
-            nyi range "Declaration without body"
+            let* tp        = make_type tp gamma in
+            let* tp, gamma = Ecm.make_pi nargs tp gamma in
+            let* res       = Ecm.add_definition name tp None gamma in
+            begin
+                match res with
+                | Ok globals ->
+                    return globals
+                | Error _ ->
+                    M.fail (
+                        Error.make range "ambiguous definition" Pretty.empty
+                    )
+            end
 
         | None,   Some (range, _) ->
             nyi range "Definition without result type"

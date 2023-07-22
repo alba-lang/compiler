@@ -1,10 +1,8 @@
-module type MONAD =
+module type CHECKER_MONAD =
 sig
-    type 'a t
+    include Fmlib_std.Interfaces.MONAD
 
-    val return:   'a -> 'a t
-    val (>>=):    'a t -> ('a -> 'b t) -> 'b t
-    val ( let* ): 'a t -> ('a -> 'b t) -> 'b t
+    val map: ('a -> 'b) -> 'a t -> 'b t
 
     val new_id:      int t
     val new_context: int t
