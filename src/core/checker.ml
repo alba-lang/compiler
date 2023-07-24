@@ -26,6 +26,7 @@ type term = {
     tgid:  int;
     tglen: int;
     term:  Term.t;
+    typ:   Term.t;
     req:   req option;
 }
 
@@ -86,30 +87,14 @@ let is_type (t: term) (g: gamma): bool =
 
 
 
-let term_in (term: Term.t) (g: gamma): term =
+let term_in (term: Term.t) (typ: Term.t) (g: gamma): term =
     {
         tgid  = Gamma.index g;
         tglen = Gamma.length g;
         term;
+        typ;
         req   = None;
     }
-
-
-let type_of (t: term) (g: gamma): Term.t =
-    let open Term in
-    match t.term with
-    | Prop ->
-        Any 0
-
-    | Any i ->
-        Any (i + 1)
-
-    | Global (_, m, i) ->
-        Globals.Entry.typ (global_entry m i g)
-
-    | _ ->
-        assert false (* nyi *)
-
 
 
 
@@ -128,7 +113,9 @@ module Make (M: CHECKER_MONAD) =
 struct
     open M
 
-    module Intm = Intm.Make (M)
+    module Intm   = Intm.Make (M)
+
+    module Arraym = Arraym.Make (M)
 
     module Optm =
     struct
@@ -187,17 +174,37 @@ struct
         | Prop | Any _ ->
             return Sign.Sort
 
+        | Pi (_, _) ->
+            assert false
+
         | _ ->
             assert false (* nyi *)
 
 
 
     let strip_metas (t: term) (_: gamma): term t =
-        let strip t =
+        let rec strip t =
             let open Term in
             match t with
             | Prop | Any _ | Top | Global _ | Local _ ->
                 return t
+
+            | Meta (_, _, _) ->
+                assert false (* nyi *)
+
+            | Pi (args, r) ->
+                let* args =
+                    Arraym.mapi
+                        (fun _ (bnd, arg) ->
+                             map (fun arg -> bnd, arg) (strip arg)
+                        )
+                        args
+                in
+                let* r =
+                    strip r
+                in
+                return (Pi (args, r))
+
             | _ ->
                 assert false
         in
@@ -244,8 +251,7 @@ struct
 
         (* MISSING: Shortcut when the term already satisfies the requirement *)
 
-        let tp = type_of term g in
-        let* ok = unify tp true req.rtyp g in
+        let* ok = unify term.typ true req.rtyp g in
         if ok then
             return (Some {term with req = Some req})
         else
@@ -256,7 +262,7 @@ struct
 
 
     let any (gamma: gamma): term t =
-        return (term_in (Term.Any 0) gamma)
+        return (term_in (Term.Any 0) (Term.Any 1) gamma)
 
 
 
@@ -267,7 +273,14 @@ struct
         assert (is_valid_term b g);
         assert (is_type a g);
         assert (is_type b g);
-        let t    = term_in (Term.arrow a.term b.term) g in
+        let* sa  = head_normal a.typ g in
+        let* sb  = head_normal b.typ g in
+        let t    =
+            term_in
+                (Term.arrow a.term b.term)
+                (Term.pi_sort sa sb)
+                g
+        in
         let* req = type_requirement g in
         return {t with req = Some req}
 
@@ -283,14 +296,21 @@ struct
             match Gamma.find_global name g with
             | [] ->
                 assert false (* nyi *)
+
             | [m, idx] ->
+                let e = global_entry m idx g
+                in
                 return (
                     Some (
-                        term_in (Term.Global (name, m, idx)) g
+                        term_in
+                            (Term.Global (name, m, idx))
+                            (Globals.Entry.typ e)
+                            g
                     )
                 )
+
             | _ ->
-                assert false
+                assert false (* nyi *)
 
 
 
