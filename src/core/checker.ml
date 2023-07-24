@@ -44,6 +44,11 @@ let is_gamma_empty (g: gamma): bool =
 
 
 
+let global_entry (m: int) (i: int) (g: gamma): Globals.Entry.t =
+    Globals.entry m i (Gamma.globals g)
+
+
+
 let is_valid_term (t: term) (g: gamma): bool =
     t.tgid = Gamma.index g
     &&
@@ -90,13 +95,18 @@ let term_in (term: Term.t) (g: gamma): term =
     }
 
 
-let type_of (t: term) (_: gamma): Term.t =
+let type_of (t: term) (g: gamma): Term.t =
     let open Term in
     match t.term with
     | Prop ->
         Any 0
+
     | Any i ->
         Any (i + 1)
+
+    | Global (_, m, i) ->
+        Globals.Entry.typ (global_entry m i g)
+
     | _ ->
         assert false (* nyi *)
 
@@ -199,7 +209,10 @@ struct
 
 
 
+
+
     (* External Functions *)
+
 
 
     let empty_gamma (globals: globals): gamma M.t =
@@ -207,6 +220,7 @@ struct
             let* id = new_context in
             return (Gamma.empty id globals)
         )
+
 
 
 
@@ -219,6 +233,8 @@ struct
             rtyp  = Term.Top;
             sign  = None;
         }
+
+
 
 
     let check (term: term) (req: req) (g: gamma): term option t =
@@ -236,13 +252,53 @@ struct
             return None
 
 
+
+
+
     let any (gamma: gamma): term t =
         return (term_in (Term.Any 0) gamma)
 
 
 
+
+
+    let arrow (a: term) (b: term) (g: gamma): term t =
+        assert (is_valid_term a g);
+        assert (is_valid_term b g);
+        assert (is_type a g);
+        assert (is_type b g);
+        let t    = term_in (Term.arrow a.term b.term) g in
+        let* req = type_requirement g in
+        return {t with req = Some req}
+
+
+
+
+
+    let find (name: Name.t) (_: req) (g: gamma): term option t =
+        match Gamma.find_local name g with
+        | Some _ ->
+            assert false (* nyi *)
+        | None ->
+            match Gamma.find_global name g with
+            | [] ->
+                assert false (* nyi *)
+            | [m, idx] ->
+                return (
+                    Some (
+                        term_in (Term.Global (name, m, idx)) g
+                    )
+                )
+            | _ ->
+                assert false
+
+
+
+
+
     let push_variable (_: bool) (_: Name.t) (_: term) (_: gamma): gamma t =
         assert false
+
 
 
 
@@ -272,5 +328,6 @@ struct
         let* tp  = map f (strip_metas tp g) in
         let* si  = signature tp g in
         let* bdy = Optm.map (fun bdy -> map f (strip_metas bdy g)) bdy in
-        return (Ok (Globals.add_definition name tp si bdy (Gamma.globals g)))
+        let e    = Globals.Entry.make name tp si bdy in
+        return (Ok (Globals.add e (Gamma.globals g)))
 end

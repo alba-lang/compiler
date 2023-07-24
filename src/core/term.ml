@@ -1,3 +1,4 @@
+open Fmlib_std
 open Std
 
 
@@ -83,11 +84,42 @@ and pointer = unit (* nyi *)
 
 
 
+
+
+
 (* Functions *)
+
+
+
+let up_from (n: int) (_: int) (t: t): t =
+    if n = 0 then
+        t
+    else
+        assert false
+
+
+
+
+let up (n: int) (t: t): t =
+    up_from n 0 t
+
+
+
 
 let prop: t = Prop
 let any0: t = Any 0
 let any1: t = Any 1
+
+
+let arrow (a: t) (b: t): t =
+    match b with
+    | Pi (args, r) ->
+        let args = Array.map (fun (b, r) -> b, up 1 r) args in
+        let args = Array.push_front (Info.Bind.arrow, a) args in
+        Pi (args, r)
+    | b ->
+        Pi ([| Info.Bind.arrow, a|], b)
+
 
 
 let equal (_: t) (_: t): bool =

@@ -3,27 +3,7 @@ open Std
 
 
 
-type term2 = {
-    tid:  int;
-    tgid: int;
-    term: Term.t;
-    req:  req;
-}
-and req = {
-    rid:  int;
-    rgid: int;
-    rtyp: term2 option;
-    sign: Sign.t;
-}
 
-
-type term    = int  *  Term.t  *  Term.tp
-type fterm   = int  *  Term.t  *  Term.tp  *  Term.tp
-type equiv   = int  *  Term.t  *  Term.t
-type subtype = int  *  Term.tp *  Term.tp
-
-type fterm_error =
-    [`Meta_needed of int * int * (term -> (fterm, fterm_error) result) |`Fatal]
 
 type t = {
     id: int;
@@ -65,21 +45,13 @@ let empty (id: int) (globals: Globals.t) : t =
 
 
 
-
-let push_var (new_id: int) (info: Info.Bind.t) ((id, t, _): term) (g: t): t =
-    assert (id = g.id);
-    { g with
-      id       = new_id;
-      previous = Some g;
-      content  = Rb_array.push (info, t, None) g.content;
-      map      = Name_map.add (Info.Bind.name info) (length g) g.map;
-    }
+let find_local (name: Name.t) (g: t): Term.t option =
+    Printf.printf "Gamma.find %s\n" (Name.string name);
+    Option.map
+        (fun i -> Term.Local (name, length g - i - 1))
+        (Name_map.find_opt name g.map)
 
 
-let make_fterm (_: term) (_: t): (fterm, fterm_error) result =
-    assert false
 
-(* Terms in the context *)
-
-let any (u: int) (g: t): term =
-    Term.(g.id, Any u, Any (u + 1))
+let find_global (name: Name.t) (g: t): (int * int) list =
+    Globals.find name g.globals

@@ -44,8 +44,8 @@ module Elaborator = struct
     let parens_term _ _ _: term = ()
     let implicit_argument _ _ _: term = ()
 
-    let unary_expression _ _ _ _ : term = ()
-    let binary_expression _ _ _ _ _ : term = ()
+    let unary_expression _ _ _ : term = ()
+    let binary_expression _ _ _ _ : term = ()
 
     let formal_argument_simple _ _: formal_argument = ()
 

@@ -1,6 +1,7 @@
 module type CHECKER_MONAD =
 sig
     include Fmlib_std.Interfaces.MONAD
+    (** @inline *)
 
     val map: ('a -> 'b) -> 'a t -> 'b t
 

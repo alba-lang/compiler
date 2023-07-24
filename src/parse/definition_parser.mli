@@ -50,16 +50,14 @@ sig
 
     val unary_expression:
         range
-        -> string
-        -> Precedence.t
+        -> Name.t
         -> term
         -> term
 
     val binary_expression:
         term
         -> range
-        -> string
-        -> Precedence.t
+        -> Name.t
         -> term
         -> term
 

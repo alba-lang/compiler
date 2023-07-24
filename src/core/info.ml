@@ -24,8 +24,20 @@ struct
         arrow = false;
     }
 
+    let arrow = {
+        name      = Name.wildcard;
+        implicit  = false;
+        with_type = true;
+        arrow     = true;
+    }
+
+
     let name (b: t): Name.t =
         b.name
+
+
+    let is_arrow (b: t): bool =
+        b.arrow
 end
 
 

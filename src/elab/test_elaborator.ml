@@ -153,7 +153,13 @@ let failure_tests: (string * string * int * int * string) array =
         "not yet implemented",
         1, 12,
         {|
-            Nat: Any
+            Nat:    Any
+
+            String: Any
+
+            (+): Nat -> Nat -> Nat
+
+            (+): String -> String -> String
         |}
     |]
 

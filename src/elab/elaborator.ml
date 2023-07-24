@@ -30,7 +30,7 @@ let return = M.return
  *)
 
 type termf =
-    Ec.gamma -> Ec.req -> Ec.term M.t
+    Ec.req -> Ec.gamma -> Ec.term M.t
 
 
 type term =
@@ -82,7 +82,7 @@ let nyi (range: range) (s: string): 'a M.t =
 let make_type ((_, f): term) (gamma: Ec.gamma): Ec.term M.t =
     M.(
         let* req = Ecm.type_requirement gamma in
-        f gamma req
+        f req gamma
     )
 
 
@@ -114,13 +114,70 @@ let check_term
         (f: Ec.gamma -> Ec.term M.t)
     : term
     =
-    let f gamma req =
+    let f req gamma =
         let* t = f gamma in
         check_ec_term range t req gamma
     in
     range, f
 
 
+
+
+
+let applyf (range: range) (f: termf) (implicit: bool) (arg: termf): termf =
+    let _ = range, f, implicit, arg in
+    assert false
+    (*
+    fun gamma req ->
+
+    (* Make the two metavariables [?a: ?A] *)
+    let* atreq = Ecm.type_requirement gamma in
+    let* matp  = Ecm.make_meta atreq gamma in
+    let* areq  = Ecm.requirement_of_type matp gamma in
+    let* ma    = Ecm.make_meta areq gamma in
+    let* _ =
+        (* Spawn a task to elaborate the term [a] and fill the
+         * corresponding hole. *)
+        Mon.spawn
+            (
+                let* a = arg gamma areq in
+                Ecm.fill_meta ma a gamma
+            )
+            ()
+    in
+    (* Make the requirement for the function term *)
+    let* freq =
+        Ecm.function_requirement implicit matp req gamma
+    in
+    let* fterm = f gamma freq in
+    (* Check that the application satisfies its requirement.
+
+       This extra check is neccessary, because the result type of [f ?a]
+       might depend on the argument [a|. The elaboration of [f] does not
+       have [?a] available, only its type [?A]. I.e. [f] satisfies the
+       requirement of being a function accepting an argument of type
+       [?A]. It remains to be checked that [f ?a] satisfies its
+       requirement. This check might include the insertion of additional
+       implicit arguments.
+    *)
+    let* fa = Ecm.apply fterm ma gamma in
+    check_ec_term range fa req gamma*)
+
+
+
+
+let arrow ((r1,f1): term) ((r2,f2): term): term =
+    let range = Position.merge r1 r2
+    in
+    let f req g =
+        let* r = Ecm.type_requirement g in
+        let* t1 = f1 r g in
+        let* t2 = f2 r g in
+        let* arr = Ecm.arrow t1 t2 g in
+        check_ec_term range arr req g
+    in
+    range,
+    f
 
 
 
@@ -176,8 +233,16 @@ let any (range: range) (ut: universe_term option): term =
 
 
 
-let name_term (_: range) (_: Name.t): term =
-    assert false
+let name_term (range: range) (name: Name.t): term =
+    let f req g =
+        let* t = Ecm.find name req g in
+        match t with
+        | None ->
+            M.fail (Error.make range "not found" (assert false))
+        | Some t ->
+            check_ec_term range t req g
+    in
+    range, f
 
 
 let string_term (_: range) (_: string): term =
@@ -227,7 +292,7 @@ let implicit_argument (_: Position.t) (_: Position.t) (_: term): term =
 
 
 let unary_expression
-        (_: range) (_: string) (_: Precedence.t) (_: term)
+        (_: range) (_: Name.t) (_: term)
     : term
     =
     assert false
@@ -236,10 +301,18 @@ let unary_expression
 
 
 let binary_expression
-        (_: term) (_: range) (_: string) (_: Precedence.t) (_: term)
+        ((r1, t1f) as t1: term) (r_op: range) (name: Name.t) ((r2, t2f) as t2: term)
     : term
     =
-    assert false
+    assert (Name.is_operator name);
+    if Name.is_arrow name then
+        arrow t1 t2
+    else
+        let range = Position.merge r1 r2 in
+        let (_, op)  = name_term r_op name in
+        let left     = applyf (Position.merge r1 r_op) op false t1f in
+        let right    = applyf range left false t2f in
+        range, right
 
 
 

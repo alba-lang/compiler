@@ -36,6 +36,11 @@ sig
 
     val any: gamma -> term M.t
 
+
+    val arrow: term -> term -> gamma -> term M.t
+
+    val find: Name.t -> req -> gamma -> term option M.t
+
     val push_variable: bool -> Name.t -> term -> gamma -> gamma M.t
 
     val make_pi: int -> term -> gamma -> (term * gamma) M.t

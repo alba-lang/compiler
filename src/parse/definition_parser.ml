@@ -51,16 +51,14 @@ sig
 
     val unary_expression:
         range
-        -> string
-        -> Precedence.t
+        -> Name.t
         -> term
         -> term
 
     val binary_expression:
         term
         -> range
-        -> string
-        -> Precedence.t
+        -> Name.t
         -> term
         -> term
 
@@ -606,10 +604,12 @@ struct
                      fail (Error.Parse (range, op1, op2))
             )
             (fun (range, str, prec) t ->
-                 return (E.unary_expression range str prec t)
+                 let name = Name.operator_with_precedence prec str in
+                 return (E.unary_expression range name t)
             )
             (fun t1 (range, str, prec) t2 ->
-                 return (E.binary_expression t1 range str prec t2))
+                 let name = Name.operator_with_precedence prec str in
+                 return (E.binary_expression t1 range name t2))
 
 
     and application (): E.term t =
