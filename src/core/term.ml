@@ -90,12 +90,48 @@ and pointer = unit (* nyi *)
 (* Functions *)
 
 
+let map_de_bruijn (f: int -> int) (t: t): t =
+    let rec go nb t =
+        match t with
+        | Top | Prop | Any _ | Global _ ->
+            t
 
-let up_from (n: int) (_: int) (t: t): t =
+        | Local (name, i) as t ->
+            if i < nb then
+                t
+            else
+                let j = f (i - nb) in
+                assert (0 <= j);
+                Local (name, j + nb)
+
+        | Pi (args, r) ->
+            Pi (
+                Stdlib.Array.mapi
+                    (fun i (bnd, a) -> bnd, go (nb + i) a)
+                    args,
+                go (nb + Array.length args) r
+            )
+
+        | _ ->
+            assert false (* nyi *)
+    in
+    go 0 t
+
+
+
+
+let up_from (n: int) (start: int) (t: t): t =
     if n = 0 then
         t
     else
-        assert false
+        map_de_bruijn
+            (fun i ->
+                 if i < start then
+                     i
+                 else
+                     i + n
+            )
+            t
 
 
 
@@ -109,6 +145,15 @@ let up (n: int) (t: t): t =
 let prop: t = Prop
 let any0: t = Any 0
 let any1: t = Any 1
+
+
+
+let pi_sort (sa: t) (sb: t): t =
+    match sa, sb with
+    | _,     Prop  -> Prop
+    | Any i, Any j -> Any (max i j)
+    | _            -> assert false (* Illegal call *)
+
 
 
 let arrow (a: t) (b: t): t =
