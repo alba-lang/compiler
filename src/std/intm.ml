@@ -1,3 +1,17 @@
+let for_all (p: int -> bool) (n: int): bool =
+    assert (0 <= n);
+    let rec go i =
+        if i = n then
+            true
+        else if p i then
+            go (i + 1)
+        else
+            false
+    in
+    go 0
+
+
+
 module Make (M: Fmlib_std.Interfaces.MONAD) =
 struct
     open M
