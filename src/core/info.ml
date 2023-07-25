@@ -38,6 +38,10 @@ struct
 
     let is_arrow (b: t): bool =
         b.arrow
+
+
+    let is_implicit (b: t): bool =
+        b.implicit
 end
 
 

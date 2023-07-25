@@ -14,7 +14,7 @@ type t =
     (* variables *)
     | Local  of Name.t * int        (* De Bruijn index *)
     | Global of Name.t * int * int  (* Module, id in module *)
-    | Meta   of Name.t * int * int  (* Context, id in context *)
+    | Meta   of Name.t * int * int  (* Context length, id in context *)
 
     (* bindings *)
     | Pi  of var_binder array * t

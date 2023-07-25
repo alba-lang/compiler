@@ -46,7 +46,6 @@ let empty (id: int) (globals: Globals.t) : t =
 
 
 let find_local (name: Name.t) (g: t): Term.t option =
-    Printf.printf "Gamma.find %s\n" (Name.string name);
     Option.map
         (fun i -> Term.Local (name, length g - i - 1))
         (Name_map.find_opt name g.map)
@@ -55,3 +54,24 @@ let find_local (name: Name.t) (g: t): Term.t option =
 
 let find_global (name: Name.t) (g: t): (int * int) list =
     Globals.find name g.globals
+
+
+let push_variable
+        (bnd: Info.Bind.t)
+        (with_map: bool)
+        (tp: Term.t)
+        (id: int)
+        (g: t)
+    : t
+    =
+    { g with
+      id;
+      previous = Some g;
+      content  =
+          Rb_array.push (bnd, tp, None) g.content;
+      map =
+          if with_map then
+              Name_map.add (Info.Bind.name bnd) (length g) g.map
+          else
+              g.map;
+    }

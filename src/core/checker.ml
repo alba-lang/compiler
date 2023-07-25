@@ -136,7 +136,8 @@ struct
 
     let head_normal (t: Term.t) (_: gamma): Term.t t =
         match t with
-        | Prop | Any _ | Top | Pi _ | Lam _ | Type _ ->
+        | Prop | Any _ | Top | Pi _ | Lam _ | Type _
+        | Local _ | Global _ | Meta _ ->
             return t
 
         | _ ->
@@ -163,8 +164,20 @@ struct
 
 
 
+    let push_variable
+            (bnd: Info.Bind.t)
+            (with_map: bool)
+            (tp: Term.t)
+            (g: gamma)
+        : gamma t
+        =
+        let* id = new_context in
+        return (Gamma.push_variable bnd with_map tp id g)
 
-    let signature (tp: Term.t) (g: gamma): Sign.t t =
+
+
+
+    let rec signature (tp: Term.t) (g: gamma): Sign.t t =
         (* [tp] must be a type! *)
         let* tp = head_normal tp g in
         match tp with
@@ -174,8 +187,29 @@ struct
         | Prop | Any _ ->
             return Sign.Sort
 
-        | Pi (_, _) ->
-            assert false
+        | Local _ ->
+            return Sign.Unknown
+
+        | Global (name, m, i) ->
+            return (Sign.Global (name, m, i))
+
+        | Meta (name, len, i) ->
+            return (Sign.Meta (name, len, i))
+
+        | Pi (args, r) ->
+            let* lst, g =
+                Arraym.fold_left
+                    (fun (lst, g) (bnd, arg) ->
+                         let* si = signature arg g in
+                         let* g  = push_variable bnd false arg g in
+                         return
+                             ((Info.Bind.is_implicit bnd, si) :: lst, g))
+                    ([], g)
+                    args
+            in
+            let* rsi = signature r g
+            in
+            return (Sign.Fun ( Array.of_list (List.rev lst), rsi))
 
         | _ ->
             assert false (* nyi *)
@@ -210,9 +244,6 @@ struct
         in
         let* term = strip t.term in
         return {t with term}
-
-
-
 
 
 
@@ -349,5 +380,12 @@ struct
         let* si  = signature tp g in
         let* bdy = Optm.map (fun bdy -> map f (strip_metas bdy g)) bdy in
         let e    = Globals.Entry.make name tp si bdy in
-        return (Ok (Globals.add e (Gamma.globals g)))
+        return (
+            Fmlib_std.Result.map_error
+                (fun (m, i) ->
+                     let e = global_entry m i g
+                     in
+                     term_in (Global (name, m, i)) (Globals.Entry.typ e) g)
+                (Globals.add e (Gamma.globals g))
+        )
 end

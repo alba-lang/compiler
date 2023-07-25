@@ -110,19 +110,30 @@ let entry (m: int) (i: int) (g: t): Entry.t =
 
 
 
-let add (e: Entry.t) (g: t): t =
-    assert (Map.find (Entry.name e) g.map = []); (* nyi *)
+let add (e: Entry.t) (g: t): (t, int * int) result =
+    match
+        Stdlib.List.find_opt
+            (fun (m, i) ->
+                 let e2 = entry m i g
+                 in
+                 Sign.equivalent (Entry.sign e) (Entry.sign e2)
+            )
+            (Map.find (Entry.name e) g.map)
+    with
+    | None ->
+        let m   = Rb_array.element g.current g.modules in
+        let idx = Module.length m in
+        let map = Map.add (Entry.name e) (g.current, idx) g.map in
+        let m   = Module.add e m in
+        Ok
+            { g with
+              modules = Rb_array.replace g.current m g.modules;
+              map
+            }
+    | Some (m, i) ->
+        Error (m, i)
 
-    let m   = Rb_array.element g.current g.modules in
-    let idx = Module.length m in
-    let map = Map.add (Entry.name e) (g.current, idx) g.map in
-    let m   = Module.add e m in
-    { g with
-      modules = Rb_array.replace g.current m g.modules;
-      map
-    }
 
 
 let find (name: Name.t) (g: t): (int * int) list =
-    Printf.printf "Globals.find %s\n" (Name.string name);
     Map.find name g.map

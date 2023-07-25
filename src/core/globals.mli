@@ -26,7 +26,7 @@ val make: unit -> t
 val entry: int -> int -> t -> Entry.t
 
 
-val add: Entry.t -> t -> t
+val add: Entry.t -> t -> (t, int * int) result
 
 
 val find: Name.t -> t -> (int * int) list

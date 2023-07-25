@@ -47,4 +47,14 @@ type t =
 val sort: t
 
 
+val equivalent: t -> t -> bool
+(** [equivalent a b] Are the signatures [a] and [b] equivalent?
+
+    Precondition: Neither [a] nor [b] has metavariables.
+
+    An unknown is equivalent with any other signature. Implicit arguments are
+    ignored. The terms [Sort] and [Global] have to be the same.
+*)
+
+
 val decide: t -> ('a * t) list -> 'a decision
