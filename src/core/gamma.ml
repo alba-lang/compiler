@@ -3,13 +3,33 @@ open Std
 
 
 
+module Entry =
+struct
+    type t = {
+        info: Info.Bind.t;
+        typ:  Term.t;
+        def:  Term.t option;
+    }
+
+    let make info typ def = {info; typ; def}
+
+    let typ (e: t): Term.t =
+        e.typ
+(*
+    let info (e: t): Info.Bind.t =
+        e.info
+
+    let definition (e: t): Term.t option =
+        e.def
+*)
+end
 
 
 type t = {
     id: int;
     previous: t option;
     globals: Globals.t;
-    content: Term.gen_binder Rb_array.t;
+    content: Entry.t Rb_array.t;
     map: int Name_map.t;
 }
 
@@ -25,6 +45,11 @@ let index (g: t ): int =
 let length (g: t): int =
     Rb_array.length g.content
 
+
+
+let de_bruijn (i: int) (g: t): int =
+    assert (i < length g);
+    length g - 1 - i
 
 
 
@@ -45,10 +70,21 @@ let empty (id: int) (globals: Globals.t) : t =
 
 
 
-let find_local (name: Name.t) (g: t): Term.t option =
-    Option.map
-        (fun i -> Term.Local (name, length g - i - 1))
-        (Name_map.find_opt name g.map)
+let entry (i: int) (g: t): Entry.t =
+    assert (i < length g);
+    Rb_array.element i g.content
+
+
+
+let typ (i: int) (g: t): Term.t =
+    assert (i < length g);
+    Term.up (length g - i) (Entry.typ (entry i g))
+
+
+
+
+let find_local (name: Name.t) (g: t): int option =
+        Name_map.find_opt name g.map
 
 
 
@@ -68,7 +104,7 @@ let push_variable
       id;
       previous = Some g;
       content  =
-          Rb_array.push (bnd, tp, None) g.content;
+          Rb_array.push (Entry.make bnd tp None) g.content;
       map =
           if with_map then
               Name_map.add (Info.Bind.name bnd) (length g) g.map

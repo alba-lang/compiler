@@ -41,7 +41,12 @@ sig
 
     val find: Name.t -> req -> gamma -> term option M.t
 
-    val push_variable: bool -> Name.t -> term -> gamma -> gamma M.t
+
+    val push_variable: bool -> bool -> Name.t -> term -> gamma -> gamma M.t
+    (** [push_variable implicit with_type name typ g]
+
+    *)
+
 
     val make_pi: int -> term -> gamma -> (term * gamma) M.t
 

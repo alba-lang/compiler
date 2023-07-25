@@ -160,6 +160,14 @@ let failure_tests: (string * string * int * int * string) array =
             (+): Nat -> Nat -> Nat
 
             (+): String -> String -> String
+
+            (|>) {A: Any} {F: A -> Any} (a: A) (f: all x: F x): F a
+            :=
+                f a
+
+            (<<) {A B C: Any} (f: B -> C) (g: A -> B): A -> C
+            :=
+                \ a := f (g a)
         |}
     |]
 

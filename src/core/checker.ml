@@ -321,12 +321,17 @@ struct
 
     let find (name: Name.t) (_: req) (g: gamma): term option t =
         match Gamma.find_local name g with
-        | Some _ ->
-            assert false (* nyi *)
+        | Some i ->
+            return (Some (
+                term_in
+                    (Term.Local (name, Gamma.de_bruijn i g))
+                    (Gamma.typ i g)
+                    g
+            ))
         | None ->
             match Gamma.find_global name g with
             | [] ->
-                assert false (* nyi *)
+                return None
 
             | [m, idx] ->
                 let e = global_entry m idx g
@@ -347,8 +352,18 @@ struct
 
 
 
-    let push_variable (_: bool) (_: Name.t) (_: term) (_: gamma): gamma t =
-        assert false
+    let push_variable
+            (implicit: bool)
+            (with_type: bool)
+            (name: Name.t)
+            (tp: term)
+            (g: gamma)
+        : gamma t
+        =
+        assert (is_type tp g);
+        let bnd = Info.Bind.make name implicit with_type
+        in
+        push_variable bnd true tp.term g
 
 
 

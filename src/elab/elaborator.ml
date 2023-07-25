@@ -126,10 +126,11 @@ let check_term
 
 let applyf (range: range) (f: termf) (implicit: bool) (arg: termf): termf =
     let _ = range, f, implicit, arg in
-    assert false
-    (*
     fun gamma req ->
+    let _ = gamma, req in
+    nyi range "function applicatioin"
 
+    (*
     (* Make the two metavariables [?a: ?A] *)
     let* atreq = Ecm.type_requirement gamma in
     let* matp  = Ecm.make_meta atreq gamma in
@@ -273,8 +274,11 @@ let list_term (_: range) (_: term list): term =
     assert false
 
 
-let apply (_: term) (_: bool) (_: term): term =
-    assert false
+let apply ((rf, f): term) (implicit: bool) ((rarg, arg): term): term =
+    let range = Position.merge rf rarg
+    in
+    range,
+    applyf range f implicit arg
 
 
 
@@ -317,8 +321,13 @@ let binary_expression
 
 
 
-let formal_argument_simple (_: range) (_: Name.t): formal_argument =
-    assert false
+let formal_argument_simple (_: range) (name: Name.t): formal_argument =
+    fun g ->
+        let* tp = assert false
+        in
+        Ecm.push_variable false false name tp g
+
+
 
 
 
@@ -339,7 +348,7 @@ let formal_argument
         in
         Listm.fold_left
             (fun (_, n) g ->
-                 Ecm.push_variable implicit n tp g
+                 Ecm.push_variable implicit true n tp g
             )
             names
             g
@@ -347,13 +356,17 @@ let formal_argument
 
 
 
+
 let product_expression
-        (_: Position.t)                 (* start of 'all' *)
+        (p1: Position.t)                 (* start of 'all' *)
         (_: formal_argument list)
-        (_: term)                       (* result type *)
+        (((_, p2),_): term)                       (* result type *)
     : term
     =
-    assert false
+    (p1, p2),
+    fun _ _ ->
+        nyi (p1, p2) "product expression"
+
 
 
 
@@ -378,24 +391,22 @@ let add_definition
         (elab: t)
     : (t, error) result
     =
-    assert (fargs = []); (* nyi *)
-
     let mon =
         let open M in
 
         (* Create an empty context *)
-        let* gamma =
+        let* g =
             Ecm.empty_gamma elab.globals
         in
 
         (* Push formal arguments into the context *)
-        let* gamma =
+        let* g =
             Listm.fold_left
                 (fun farg g -> farg g)
                 fargs
-                gamma
+                g
         in
-        let nargs = Ec.gamma_length gamma
+        let nargs = Ec.gamma_length g
         in
 
         (* Elaborate the result type and the body *)
@@ -404,9 +415,9 @@ let add_definition
             assert false    (* cannot happen, must be syntax error *)
 
         | Some ((range, _) as tp), None ->
-            let* tp        = make_type tp gamma in
-            let* tp, gamma = Ecm.make_pi nargs tp gamma in
-            let* res       = Ecm.add_definition name tp None gamma in
+            let* tp    = make_type tp g in
+            let* tp, g = Ecm.make_pi nargs tp g in
+            let* res   = Ecm.add_definition name tp None g in
             begin
                 match res with
                 | Ok globals ->

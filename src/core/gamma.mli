@@ -3,16 +3,23 @@ open Std
 type t
 
 
+val index:  t -> int
+
+
 val length: t -> int
 
 
-val index:  t -> int
+val de_bruijn: int -> t -> int
 
 
 val empty: int -> Globals.t -> t
 
 
-val find_local: Name.t -> t -> Term.t option
+val typ: int -> t -> Term.t
+(** [typ i g] Type of the [i]th entry. *)
+
+
+val find_local: Name.t -> t -> int option
 
 
 val find_global: Name.t -> t -> (int * int) list
