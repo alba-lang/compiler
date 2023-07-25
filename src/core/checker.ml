@@ -73,6 +73,12 @@ let is_valid_req (req: req) (g: gamma): bool =
 
 
 
+
+let is_prefix (g0: gamma) (g: gamma): bool =
+    Gamma.is_prefix g0 g
+
+
+
 let is_type_req (req: req) (_: gamma): bool =
     req.rtyp = Term.Top
 
@@ -369,12 +375,12 @@ struct
 
 
 
-    let make_pi (nargs: int) (tp: term) (g: gamma): (term * gamma) t =
+    let make_pi (tp: term) (g: gamma) (g0: gamma): term t =
         assert (is_valid_term tp g);
-        assert (nargs <= Gamma.length g);
+        assert (is_prefix g0 g);
         assert (is_type tp g);
-        if nargs = 0 then
-            return (tp, g)
+        if Gamma.equal g0 g then
+            return tp
         else
             assert false
 

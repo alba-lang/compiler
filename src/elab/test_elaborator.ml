@@ -131,6 +131,23 @@ let check_failures (tests: (string * string * int * int * string) array): bool =
 
 let success_tests: string array =
     [|
+        {|
+            Nat:    Any
+
+            String: Any
+
+            (+): Nat -> Nat -> Nat
+
+            (+): String -> String -> String
+
+            (|>) {A: Any} {F: A -> Any} (a: A) (f: all x: F x): F a
+            :=
+                f a
+
+            (<<) {A B C: Any} (f: B -> C) (g: A -> B): A -> C
+            :=
+                \ a := f (g a)
+        |}
     |]
 
 
@@ -149,25 +166,13 @@ let success_tests: string array =
 
 let failure_tests: (string * string * int * int * string) array =
     [|
-        "dummy",
-        "not yet implemented",
-        1, 12,
+        "(|>) with a wrong function type",
+        "cannot infer type",
+        1, 55,
+(*        10        20        30        40        50        60
+012345678 012345678 012345678 012345678 012345678 012345678 012345678 *)
         {|
-            Nat:    Any
-
-            String: Any
-
-            (+): Nat -> Nat -> Nat
-
-            (+): String -> String -> String
-
-            (|>) {A: Any} {F: A -> Any} (a: A) (f: all x: F x): F a
-            :=
-                f a
-
-            (<<) {A B C: Any} (f: B -> C) (g: A -> B): A -> C
-            :=
-                \ a := f (g a)
+            (|>) {A: Any} {F: A -> Any} (a: A) (f: all x: F a): F a
         |}
     |]
 

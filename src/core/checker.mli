@@ -48,7 +48,14 @@ sig
     *)
 
 
-    val make_pi: int -> term -> gamma -> (term * gamma) M.t
+    val make_pi: term -> gamma -> gamma -> term M.t
+    (** [make_pi tp g g0]
+
+        Make a product term [all (x: A) (y: B) ... : tp] where [tp] is valid in
+        the context [g = g0, (x:A) (y:B) ...].
+    *)
+
+
 
     val add_definition:
         Name.t -> term -> term option -> gamma

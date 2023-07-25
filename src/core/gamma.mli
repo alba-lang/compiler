@@ -15,6 +15,12 @@ val de_bruijn: int -> t -> int
 val empty: int -> Globals.t -> t
 
 
+val equal: t -> t -> bool
+
+
+val is_prefix: t -> t -> bool
+
+
 val typ: int -> t -> Term.t
 (** [typ i g] Type of the [i]th entry. *)
 

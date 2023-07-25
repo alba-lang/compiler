@@ -73,9 +73,22 @@ let nyi (range: range) (s: string): 'a M.t =
             range
             "not yet implemented"
             Pretty.(text "<" <+> text s <+> text "> " <+>
-                    text "is not yet implemented")
+                    text "is not yet implemented." <+> cut <+> cut)
     )
 
+
+let cannot_infer_type (range: range): 'a M.t =
+    M.fail (
+        Error.make
+            range
+            "cannot infer type"
+            Pretty.(wrap_words
+                        {| I cannot infer a type of this expression.
+                           Can you help me with some type annotations? |}
+                    <+> cut <+> cut
+                    )
+    )
+let _ = cannot_infer_type
 
 
 
@@ -321,11 +334,12 @@ let binary_expression
 
 
 
-let formal_argument_simple (_: range) (name: Name.t): formal_argument =
-    fun g ->
-        let* tp = assert false
+let formal_argument_simple (range: range) (_: Name.t): formal_argument =
+    fun _ ->
+        nyi range "formal argument without type"
+        (*let* tp = assert false
         in
-        Ecm.push_variable false false name tp g
+        Ecm.push_variable false false name tp g*)
 
 
 
@@ -359,13 +373,23 @@ let formal_argument
 
 let product_expression
         (p1: Position.t)                 (* start of 'all' *)
-        (_: formal_argument list)
-        (((_, p2),_): term)                       (* result type *)
+        (fargs: formal_argument list)
+        (((_, p2),_) as tp: term)        (* result type *)
     : term
     =
-    (p1, p2),
-    fun _ _ ->
-        nyi (p1, p2) "product expression"
+    let range = p1, p2
+    in
+    range,
+    fun req g0 ->
+        let* g =
+            Listm.fold_left
+                (fun farg g -> farg g)
+                fargs
+                g0
+        in
+        let* tp  = make_type tp g in
+        let* pi  = Ecm.make_pi tp g g0 in
+        check_ec_term range pi req g
 
 
 
@@ -395,7 +419,7 @@ let add_definition
         let open M in
 
         (* Create an empty context *)
-        let* g =
+        let* g0 =
             Ecm.empty_gamma elab.globals
         in
 
@@ -404,9 +428,7 @@ let add_definition
             Listm.fold_left
                 (fun farg g -> farg g)
                 fargs
-                g
-        in
-        let nargs = Ec.gamma_length g
+                g0
         in
 
         (* Elaborate the result type and the body *)
@@ -416,7 +438,7 @@ let add_definition
 
         | Some ((range, _) as tp), None ->
             let* tp    = make_type tp g in
-            let* tp, g = Ecm.make_pi nargs tp g in
+            let* tp    = Ecm.make_pi tp g g0 in
             let* res   = Ecm.add_definition name tp None g in
             begin
                 match res with

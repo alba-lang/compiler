@@ -3,15 +3,29 @@ open Std
 
 
 
+
+
+type t = {
+    id: int;
+    globals: Globals.t;
+    content: entry Rb_array.t;
+    map: int Name_map.t;
+}
+
+and entry = {
+    previous: t;
+    info: Info.Bind.t;
+    typ:  Term.t;
+    def:  Term.t option;
+}
+
+
 module Entry =
 struct
-    type t = {
-        info: Info.Bind.t;
-        typ:  Term.t;
-        def:  Term.t option;
-    }
+    type t = entry
 
-    let make info typ def = {info; typ; def}
+
+    let make previous info typ def = {previous; info; typ; def}
 
     let typ (e: t): Term.t =
         e.typ
@@ -24,14 +38,6 @@ struct
 *)
 end
 
-
-type t = {
-    id: int;
-    previous: t option;
-    globals: Globals.t;
-    content: Entry.t Rb_array.t;
-    map: int Name_map.t;
-}
 
 
 
@@ -53,6 +59,10 @@ let de_bruijn (i: int) (g: t): int =
 
 
 
+let equal (g1: t) (g2: t): bool =
+    g1.id = g2.id
+
+
 let globals (g: t): Globals.t =
     g.globals
 
@@ -61,7 +71,6 @@ let globals (g: t): Globals.t =
 let empty (id: int) (globals: Globals.t) : t =
     {
         id;
-        previous = None;
         globals;
         content  = Rb_array.empty;
         map      = Name_map.empty;
@@ -69,10 +78,24 @@ let empty (id: int) (globals: Globals.t) : t =
 
 
 
-
 let entry (i: int) (g: t): Entry.t =
     assert (i < length g);
     Rb_array.element i g.content
+
+
+
+let is_prefix (g0: t) (g: t): bool =
+    let n0 = length g0
+    and n  = length g
+    in
+    if n0 > n then
+        false
+    else if n0 = n then
+        equal g0 g
+    else
+        let e = entry n0 g in
+        equal g0 e.previous
+
 
 
 
@@ -102,9 +125,8 @@ let push_variable
     =
     { g with
       id;
-      previous = Some g;
       content  =
-          Rb_array.push (Entry.make bnd tp None) g.content;
+          Rb_array.push (Entry.make g bnd tp None) g.content;
       map =
           if with_map then
               Name_map.add (Info.Bind.name bnd) (length g) g.map
