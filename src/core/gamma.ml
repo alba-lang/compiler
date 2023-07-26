@@ -22,6 +22,8 @@ and entry = {
 
 module Entry =
 struct
+    type gamma = t
+
     type t = entry
 
 
@@ -29,13 +31,15 @@ struct
 
     let typ (e: t): Term.t =
         e.typ
-(*
+
     let info (e: t): Info.Bind.t =
         e.info
 
     let definition (e: t): Term.t option =
         e.def
-*)
+
+    let gamma (e: t): gamma =
+        e.previous
 end
 
 

@@ -74,8 +74,11 @@ let is_valid_req (req: req) (g: gamma): bool =
 
 
 
+
 let is_prefix (g0: gamma) (g: gamma): bool =
     Gamma.is_prefix g0 g
+
+
 
 
 
@@ -84,7 +87,15 @@ let is_type_req (req: req) (_: gamma): bool =
 
 
 
+
+
 let is_type (t: term) (g: gamma): bool =
+    (* Does the term [t] satisfy a type requirement.
+
+       Note: The term might be a type, but it has not yet been checked that it
+       satisfies a type requirement. In that case the function [is_type] returns
+       [false].
+    *)
     match t.req with
     | None ->
         false
@@ -115,6 +126,12 @@ let make_globals (): globals =
 
 
 
+
+
+
+
+(* Monadic Functions *)
+
 module Make (M: CHECKER_MONAD) =
 struct
     open M
@@ -138,7 +155,15 @@ struct
 
 
 
-    (* Internal Functions *)
+
+
+
+
+
+
+    (* Internal Functions with Raw Terms *)
+
+
 
     let head_normal (t: Term.t) (_: gamma): Term.t t =
         match t with
@@ -222,15 +247,24 @@ struct
 
 
 
-    let strip_metas (t: term) (_: gamma): term t =
+
+
+    let strip_metas (t: Term.t) (n: int) (g: gamma): Term.t t =
+        (* Strip all metavariables not valid in a context above level [n] *)
+        assert (0 <= n);
+        assert (n <= Gamma.length g);
         let rec strip t =
             let open Term in
             match t with
             | Prop | Any _ | Top | Global _ | Local _ ->
                 return t
 
-            | Meta (_, _, _) ->
-                assert false (* nyi *)
+            | Meta (_, i, _) as m ->
+                assert (i <= Gamma.length g);
+                if i <= n then
+                    return m
+                else
+                    assert false (* nyi *)
 
             | Pi (args, r) ->
                 let* args =
@@ -248,8 +282,28 @@ struct
             | _ ->
                 assert false
         in
-        let* term = strip t.term in
-        return {t with term}
+        if n = Gamma.length g then
+            return t
+        else
+            strip t
+
+
+
+
+
+
+
+
+
+
+
+
+    (* Internal Functions with Terms *)
+
+
+
+    let strip_metas1 (t: term) (i: int) (g: gamma): term t =
+        map (fun term -> {t with term}) (strip_metas t.term i g)
 
 
 
@@ -312,14 +366,12 @@ struct
         assert (is_type b g);
         let* sa  = head_normal a.typ g in
         let* sb  = head_normal b.typ g in
-        let t    =
+        return (
             term_in
                 (Term.arrow a.term b.term)
                 (Term.pi_sort sa sb)
                 g
-        in
-        let* req = type_requirement g in
-        return {t with req = Some req}
+        )
 
 
 
@@ -382,6 +434,30 @@ struct
         if Gamma.equal g0 g then
             return tp
         else
+            let len  = Gamma.length g
+            and len0 = Gamma.length g0
+            in
+            assert (len0 < len);
+            let nargs = len - len0
+            in
+            (* MISSING:!!!!!
+                    Stripping of metavariables not valid in [g0].
+            *)
+            let* sort =
+                head_normal tp.term g
+            in
+            let* _ =
+                Intm.fold_down
+                    (fun i sb ->
+                         let e = Gamma.entry i g in
+                         let* sa =
+                             Gamma.Entry.(head_normal (typ e) (gamma e))
+                         in
+                         return (Term.pi_sort sa sb)
+                    )
+                    sort
+                    nargs
+            in
             assert false
 
 
@@ -397,9 +473,9 @@ struct
         assert (is_valid_term_opt bdy g);
         let f t = t.term
         in
-        let* tp  = map f (strip_metas tp g) in
+        let* tp  = map f (strip_metas1 tp 0 g) in
         let* si  = signature tp g in
-        let* bdy = Optm.map (fun bdy -> map f (strip_metas bdy g)) bdy in
+        let* bdy = Optm.map (fun bdy -> map f (strip_metas1 bdy 0 g)) bdy in
         let e    = Globals.Entry.make name tp si bdy in
         return (
             Fmlib_std.Result.map_error

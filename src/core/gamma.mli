@@ -2,6 +2,20 @@ open Std
 
 type t
 
+module Entry:
+sig
+    type gamma = t
+
+    type t
+
+    val typ:  t -> Term.t
+
+    val info: t -> Info.Bind.t
+
+    val definition: t -> Term.t option
+
+    val gamma: t -> gamma
+end
 
 val index:  t -> int
 
@@ -13,6 +27,9 @@ val de_bruijn: int -> t -> int
 
 
 val empty: int -> Globals.t -> t
+
+
+val entry: int -> t -> Entry.t
 
 
 val equal: t -> t -> bool
