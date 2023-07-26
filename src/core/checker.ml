@@ -198,7 +198,7 @@ struct
     let push_variable
             (bnd: Info.Bind.t)
             (with_map: bool)
-            (tp: Term.t)
+            (tp: Term.pair)
             (g: gamma)
         : gamma t
         =
@@ -227,11 +227,11 @@ struct
         | Meta (name, len, i) ->
             return (Sign.Meta (name, len, i))
 
-        | Pi (args, r) ->
+        | Pi (args, (r, _)) ->
             let* lst, g =
                 Arraym.fold_left
-                    (fun (lst, g) (bnd, arg) ->
-                         let* si = signature arg g in
+                    (fun (lst, g) (bnd, (a, _ as arg)) ->
+                         let* si = signature a g in
                          let* g  = push_variable bnd false arg g in
                          return
                              ((Info.Bind.is_implicit bnd, si) :: lst, g))
@@ -250,7 +250,7 @@ struct
 
 
     let strip_metas (t: Term.t) (n: int) (g: gamma): Term.t t =
-        (* Strip all metavariables not valid in a context above level [n] *)
+        (* Strip all metavariables of level [n] or higher *)
         assert (0 <= n);
         assert (n <= Gamma.length g);
         let rec strip t =
@@ -261,7 +261,7 @@ struct
 
             | Meta (_, i, _) as m ->
                 assert (i <= Gamma.length g);
-                if i <= n then
+                if i < n then
                     return m
                 else
                     assert false (* nyi *)
@@ -270,18 +270,23 @@ struct
                 let* args =
                     Arraym.mapi
                         (fun _ (bnd, arg) ->
-                             map (fun arg -> bnd, arg) (strip arg)
+                             map (fun arg -> bnd, arg) (strip_pair arg)
                         )
                         args
                 in
                 let* r =
-                    strip r
+                    strip_pair r
                 in
                 return (Pi (args, r))
 
             | _ ->
                 assert false
+
+        and strip_pair (t, tp) =
+            let* t = strip t in
+            map (fun tp -> t, tp) (strip tp)
         in
+
         if n = Gamma.length g then
             return t
         else
@@ -302,8 +307,8 @@ struct
 
 
 
-    let strip_metas1 (t: term) (i: int) (g: gamma): term t =
-        map (fun term -> {t with term}) (strip_metas t.term i g)
+    let strip_metas1 (t: term) (n: int) (g: gamma): term t =
+        map (fun term -> {t with term}) (strip_metas t.term n g)
 
 
 
@@ -368,7 +373,7 @@ struct
         let* sb  = head_normal b.typ g in
         return (
             term_in
-                (Term.arrow a.term b.term)
+                (Term.arrow (a.term, a.typ) (b.term, b.typ))
                 (Term.pi_sort sa sb)
                 g
         )
@@ -383,7 +388,7 @@ struct
             return (Some (
                 term_in
                     (Term.Local (name, Gamma.de_bruijn i g))
-                    (Gamma.typ i g)
+                    (fst (Gamma.typ i g))
                     g
             ))
         | None ->
@@ -421,7 +426,7 @@ struct
         assert (is_type tp g);
         let bnd = Info.Bind.make name implicit with_type
         in
-        push_variable bnd true tp.term g
+        push_variable bnd true (tp.term, tp.typ) g
 
 
 
@@ -451,7 +456,7 @@ struct
                     (fun i sb ->
                          let e = Gamma.entry i g in
                          let* sa =
-                             Gamma.Entry.(head_normal (typ e) (gamma e))
+                             Gamma.Entry.(head_normal (fst (typ e)) (gamma e))
                          in
                          return (Term.pi_sort sa sb)
                     )

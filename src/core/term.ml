@@ -17,7 +17,7 @@ type t =
     | Meta   of Name.t * int * int  (* Context length, id in context *)
 
     (* bindings *)
-    | Pi  of var_binder array * t
+    | Pi  of var_binder array * pair
     | Lam of var_binder array * t
     | Let of let_binder array * t
 
@@ -42,13 +42,13 @@ type t =
           * pointer (* pointer into arguments *)
 
 
+and pair = t * t    (* usually a term and its type or a type and its sort *)
+
 and tp  = t  (* synonym *)
 
-and var_binder = Info.Bind.t * tp
+and var_binder = Info.Bind.t * pair         (* type *)
 
-and let_binder = Info.Bind.t * tp * t
-
-and gen_binder = Info.Bind.t * tp * t option
+and let_binder = Info.Bind.t * pair * t     (* type + definition term *)
 
 and argument = Info.Arg.t * t
 
@@ -107,14 +107,19 @@ let map_de_bruijn (f: int -> int) (t: t): t =
         | Pi (args, r) ->
             Pi (
                 Stdlib.Array.mapi
-                    (fun i (bnd, a) -> bnd, go (nb + i) a)
+                    (fun i (bnd, p) -> bnd, pair_go (nb + i) p)
                     args,
-                go (nb + Array.length args) r
+                pair_go (nb + Array.length args) r
             )
 
         | _ ->
             assert false (* nyi *)
+
+    and pair_go nb (t, tp) =
+        go nb t,
+        go nb tp
     in
+
     go 0 t
 
 
@@ -134,10 +139,24 @@ let up_from (n: int) (start: int) (t: t): t =
             t
 
 
+let pair_up_from (n: int) (start: int) ((t, tp): pair): pair =
+    up_from n start t,
+    up_from n start tp
+
+
+
 
 
 let up (n: int) (t: t): t =
     up_from n 0 t
+
+
+
+
+let pair_up (n: int) ((t, tp): pair): pair =
+    up n t,
+    up n tp
+
 
 
 
@@ -156,14 +175,14 @@ let pi_sort (sa: t) (sb: t): t =
 
 
 
-let arrow (a: t) (b: t): t =
-    match b with
+let arrow (a: pair) ((bt, _) as b: pair): t =
+    match bt with
     | Pi (args, r) ->
-        let args = Array.map (fun (b, r) -> b, up 1 r) args in
+        let args = Array.map (fun (bnd, p) -> bnd, pair_up 1 p) args in
         let args = Array.push_front (Info.Bind.arrow, a) args in
-        Pi (args, r)
-    | b ->
-        Pi ([| Info.Bind.arrow, a|], b)
+        Pi (args, pair_up 1 r)
+    | _ ->
+        Pi ([| Info.Bind.arrow, a|], pair_up 1 b)
 
 
 
