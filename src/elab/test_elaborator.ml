@@ -93,7 +93,7 @@ let check_failure
             Error.tag e <> tag || Error.line1 e <> row || Error.column1 e <> col
         then
             begin
-                printf "unexpected semantic error of <%s>\n" desc;
+                printf "unexpected semantic error of failure test <%s>\n" desc;
                 printf "  expected (%d,%d) <%s>\n" row col tag;
                 printf "  found    (%d,%d) <%s>\n"
                     (Error.line1 e) (Error.column1 e) (Error.tag e);
