@@ -89,7 +89,7 @@ struct
 
     let multi_line_comment: unit t =
         let any_char =
-            charp (fun _ -> true) "any character"
+            charp (fun _ -> true) "completion of comment"
         in
         let rec rest flag =
             let* c = any_char in
@@ -322,49 +322,37 @@ struct
      * =====
      *)
 
-    let unknown: Token.t t =
-        let* c = charp (fun _ -> true) "any char"
-        in
-        return (Token_type.Unknown, String.make 1 c)
 
-    let token: (Position.range * Token.t) t =
-        let one_token =
-            identifier_or_keyword
-            </> metavariable
-            </> symbol
-            </> operator
-            </> number
-            </> alba_string
-            </> alba_char
-            </> unknown
-        in
-        let* _ = whitespace in
-        located one_token
+    let token: Token_plus.t t =
+        lexer
+            whitespace
+            (Token_type.Unknown, "")
+            (
+                identifier_or_keyword
+                </> metavariable
+                </> symbol
+                </> operator
+                </> number
+                </> alba_string
+                </> alba_char
+            )
 
 
 
 
 
-    (* Parser Module
+    (* Lexer Module
      * =============
      *)
 
     module Parser = struct
         include Basic.Parser
 
-        let make (pos: Position.t): t =
-            make_parser pos () token
-
         let start: t =
-            make Position.start
+            make_partial () token
 
         let restart (lex: t): t =
-            assert (has_succeeded lex);
-            fold_lookahead
-                (make (position lex))
-                put
-                put_end
-                lex
+            restart_partial token lex
     end
 end
 

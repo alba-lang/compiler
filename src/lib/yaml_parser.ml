@@ -705,8 +705,9 @@ let write_errors (source: string) (p: Parser.t): unit =
     let open Parser in
     assert (has_result p);
     assert (not (has_succeeded p));
-    Error_reporter.make Error.range Error.doc p
-    |> Error_reporter.run_on_string source
+    let module Reporter = Error_reporter.Make (Parser) in
+    Reporter.make Error.range Error.doc p
+    |> Reporter.run_on_string source
     |> Pretty.layout 80
     |> Pretty.write_to_channel stdout
 

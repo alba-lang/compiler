@@ -195,8 +195,8 @@ let failure_tests: (string * string * int * int) array =
         "declaration withtout result type",
         "f (A: Any)", 0, 10;
 
-        (*"unterminated comment",
-        "{-  ", 0, 3;*)
+        "unterminated multiline comment",
+        "{- -", 0, 4;
     |]
 
 
