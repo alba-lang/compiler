@@ -109,15 +109,15 @@ let success_tests: string array =
     [|
         {|
             T _ _meta (x y z: Prop) (+) ((-): Any)
-             : Any 1
-             :=
+             : Any 1 -- comment
+             :=      -- comment
              Any 0
         |};
 
 
         {|
-          f: T := Prop
-          g: TG
+          f: T := Prop  {- comment -}
+          g: {- comment -} TG
         |};
 
 
@@ -194,6 +194,9 @@ let failure_tests: (string * string * int * int) array =
 
         "declaration withtout result type",
         "f (A: Any)", 0, 10;
+
+        (*"unterminated comment",
+        "{-  ", 0, 3;*)
     |]
 
 

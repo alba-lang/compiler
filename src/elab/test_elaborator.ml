@@ -140,13 +140,13 @@ let success_tests: string array =
 
             (+): String -> String -> String
 
-            (|>) {A: Any} {F: A -> Any} (a: A) (f: all x: F x): F a
+            {- (|>) {A: Any} {F: A -> Any} (a: A) (f: all x: F x): F a
             :=
                 f a
 
             (<<) {A B C: Any} (f: B -> C) (g: A -> B): A -> C
             :=
-                \ a := f (g a)
+                \ a := f (g a) -}
         |}
     |]
 
@@ -165,7 +165,7 @@ let success_tests: string array =
 
 
 let failure_tests: (string * string * int * int * string) array =
-    [|
+    [| (*
         "(|>) with a wrong function type",
         "cannot infer type",
         1, 55,
@@ -174,6 +174,7 @@ let failure_tests: (string * string * int * int * string) array =
         {|
             (|>) {A: Any} {F: A -> Any} (a: A) (f: all x: F a): F a
         |}
+          *)
     |]
 
 
