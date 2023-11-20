@@ -1,3 +1,6 @@
+open Core
+
+
 (* Basic Monad *)
 
 module Make (Final: Fmlib_std.Interfaces.ANY) =
@@ -48,6 +51,13 @@ struct
     let new_id: int t =
         fun s k ->
         let id = State.new_id s in
+        k id s
+
+
+
+    let new_meta (req: Gamma.req) (ctxt: int): int t =
+        fun s k ->
+        let id = State.new_meta req ctxt s in
         k id s
 
 

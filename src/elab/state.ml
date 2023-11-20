@@ -1,7 +1,12 @@
 open Std
+open Core
 
 
-type meta
+
+type meta = {
+    req: Gamma.req;
+}
+
 
 type context =
     meta Array_buffer.t
@@ -36,6 +41,17 @@ let new_context (s: t): int =
     let id = length s.contexts in
     push s.contexts (make ());
     id
+
+
+
+let new_meta (req: Gamma.req) (ctxt: int) (s: t): int =
+    let open Array_buffer in
+    assert (ctxt < length s.contexts);
+    let c = get s.contexts ctxt in
+    let id = length c in
+    push c {req};
+    id
+
 
 
 

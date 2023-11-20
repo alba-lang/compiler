@@ -3,6 +3,9 @@ open Intf
 
 
 
+type range = Fmlib_parse.Position.range
+
+
 type globals =
     Globals.t
 
@@ -11,23 +14,14 @@ type gamma =
 
 
 
-type req = {
-    rid:   int;
-    rgid:  int;
-    rglen: int;
-    rtyp:  Term.t;
-    sign:  Sign.t option;      (* only for function terms *)
-}
-
-
-
 
 type term = {
-    tgid:  int;
-    tglen: int;
+    (* A term is valid in a certain context. *)
+    tgid:  int;         (* id of gamma *)
+    tglen: int;         (* length of gamma *)
     term:  Term.t;
     typ:   Term.t;
-    req:   req option;
+    req:   Gamma.req option;
 }
 
 
@@ -66,12 +60,6 @@ let is_valid_term_opt (t: term option) (g: gamma): bool =
 
 
 
-let is_valid_req (req: req) (g: gamma): bool =
-    req.rgid = Gamma.index g
-    &&
-    req.rglen = Gamma.length g
-
-
 
 
 
@@ -82,7 +70,7 @@ let is_prefix (g0: gamma) (g: gamma): bool =
 
 
 
-let is_type_req (req: req) (_: gamma): bool =
+let is_type_req (req: Gamma.req) (_: gamma): bool =
     req.rtyp = Term.Top
 
 
@@ -112,6 +100,13 @@ let term_in (term: Term.t) (typ: Term.t) (g: gamma): term =
         typ;
         req   = None;
     }
+
+
+
+let term_with_req (req: Gamma.req) (term: term): term =
+    assert (term.req = None);
+    {term with req = Some req}
+
 
 
 
@@ -165,6 +160,7 @@ struct
 
 
 
+
     let head_normal (t: Term.t) (_: gamma): Term.t t =
         match t with
         | Prop | Any _ | Top | Pi _ | Lam _ | Type _
@@ -195,7 +191,7 @@ struct
 
 
 
-    let push_variable
+    let push_variable_bnd
             (bnd: Info.Bind.t)
             (with_map: bool)
             (tp: Term.pair)
@@ -232,7 +228,7 @@ struct
                 Arraym.fold_left
                     (fun (lst, g) (bnd, (a, _ as arg)) ->
                          let* si = signature a g in
-                         let* g  = push_variable bnd false arg g in
+                         let* g  = push_variable_bnd bnd false arg g in
                          return
                              ((Info.Bind.is_implicit bnd, si) :: lst, g))
                     ([], g)
@@ -303,7 +299,11 @@ struct
 
 
 
+
+
     (* Internal Functions with Terms *)
+
+
 
 
 
@@ -327,23 +327,42 @@ struct
 
 
 
-    let type_requirement (gamma: gamma): req t =
+    let type_requirement (g: gamma): Gamma.req t =
         let* rid = new_id in
-        return {
-            rid;
-            rgid  = Gamma.index gamma;
-            rglen = Gamma.length gamma;
-            rtyp  = Term.Top;
-            sign  = None;
-        }
+        return (Gamma.type_requirement rid g)
 
 
 
 
-    let check (term: term) (req: req) (g: gamma): term option t =
+    let missing_type (_:range) (g: gamma): term t =
+        (* Make a new metavariable [?T: Top] to represent the missing type.
+         *)
+
+        let* req  = type_requirement g in
+        let* midx = new_meta req (Gamma.index g) in
+        let  name =
+            String.concat ""
+                ["?"
+                ;string_of_int (Gamma.length g)
+                ; "."
+                ; string_of_int midx
+                ]
+            |> Name.normal
+        in
+        return (
+            term_in
+                (Term.(Meta (name, Gamma.length g, midx)))
+                req.rtyp
+                g
+            |> term_with_req req
+        )
+
+
+
+    let check (term: term) (req: Gamma.req) (g: gamma): term option t =
         (* check if the term satisfies the requirement in the context *)
         assert (is_valid_term term g);
-        assert (is_valid_req  req  g);
+        assert (Gamma.is_valid_req  req  g);
 
         (* MISSING: Shortcut when the term already satisfies the requirement *)
 
@@ -382,7 +401,7 @@ struct
 
 
 
-    let find (name: Name.t) (_: req) (g: gamma): term option t =
+    let find (name: Name.t) (_: Gamma.req) (g: gamma): term option t =
         match Gamma.find_local name g with
         | Some i ->
             return (Some (
@@ -426,7 +445,7 @@ struct
         assert (is_type tp g);
         let bnd = Info.Bind.make name implicit with_type
         in
-        push_variable bnd true (tp.term, tp.typ) g
+        push_variable_bnd bnd true (tp.term, tp.typ) g
 
 
 

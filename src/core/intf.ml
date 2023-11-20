@@ -7,6 +7,7 @@ sig
 
     val new_id:      int t
     val new_context: int t
+    val new_meta: Gamma.req -> int -> int t
 end
 
 

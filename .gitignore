@@ -10,6 +10,9 @@ todo.*
 *.cmxa
 *.swp
 
+todo.md
+
+
 # ocamlbuild working directory
 _build/
 

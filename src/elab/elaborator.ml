@@ -7,8 +7,7 @@ module Pretty   = Fmlib_pretty.Print
 
 module M   = Monad.Make (struct type t = Checker.globals end)
 
-module Ec  = Checker
-module Ecm = Checker.Make (M)
+module Checker_m = Checker.Make (M)
 
 module Listm = Fmlib_std.List.Monadic (M)
 
@@ -30,7 +29,7 @@ let return = M.return
  *)
 
 type termf =
-    Ec.req -> Ec.gamma -> Ec.term M.t
+    Gamma.req -> Checker.gamma -> Checker.term M.t
 
 
 type term =
@@ -38,7 +37,7 @@ type term =
 
 
 type formal_argument =
-    Ec.gamma -> Ec.gamma M.t
+    Checker.gamma -> Checker.gamma M.t
 
 
 type universe_term
@@ -92,9 +91,9 @@ let _ = cannot_infer_type
 
 
 
-let make_type ((_, f): term) (gamma: Ec.gamma): Ec.term M.t =
+let make_type ((_, f): term) (gamma: Checker.gamma): Checker.term M.t =
     M.(
-        let* req = Ecm.type_requirement gamma in
+        let* req = Checker_m.type_requirement gamma in
         f req gamma
     )
 
@@ -104,12 +103,12 @@ let make_type ((_, f): term) (gamma: Ec.gamma): Ec.term M.t =
 
 let check_ec_term
         (range: range)
-        (t:     Ec.term)
-        (req:   Ec.req)
-        (gamma: Ec.gamma)
-    : Ec.term M.t
+        (t:     Checker.term)
+        (req:   Gamma.req)
+        (gamma: Checker.gamma)
+    : Checker.term M.t
     =
-    let* t = Ecm.check t req gamma in
+    let* t = Checker_m.check t req gamma in
     match t with
     | Some t ->
         return t
@@ -124,7 +123,7 @@ let check_ec_term
 
 let check_term
         (range: range)
-        (f: Ec.gamma -> Ec.term M.t)
+        (f: Checker.gamma -> Checker.term M.t)
     : term
     =
     let f req gamma =
@@ -145,23 +144,23 @@ let applyf (range: range) (f: termf) (implicit: bool) (arg: termf): termf =
 
     (*
     (* Make the two metavariables [?a: ?A] *)
-    let* atreq = Ecm.type_requirement gamma in
-    let* matp  = Ecm.make_meta atreq gamma in
-    let* areq  = Ecm.requirement_of_type matp gamma in
-    let* ma    = Ecm.make_meta areq gamma in
+    let* atreq = Checker_m.type_requirement gamma in
+    let* matp  = Checker_m.make_meta atreq gamma in
+    let* areq  = Checker_m.requirement_of_type matp gamma in
+    let* ma    = Checker_m.make_meta areq gamma in
     let* _ =
         (* Spawn a task to elaborate the term [a] and fill the
          * corresponding hole. *)
         Mon.spawn
             (
                 let* a = arg gamma areq in
-                Ecm.fill_meta ma a gamma
+                Checker_m.fill_meta ma a gamma
             )
             ()
     in
     (* Make the requirement for the function term *)
     let* freq =
-        Ecm.function_requirement implicit matp req gamma
+        Checker_m.function_requirement implicit matp req gamma
     in
     let* fterm = f gamma freq in
     (* Check that the application satisfies its requirement.
@@ -174,7 +173,7 @@ let applyf (range: range) (f: termf) (implicit: bool) (arg: termf): termf =
        requirement. This check might include the insertion of additional
        implicit arguments.
     *)
-    let* fa = Ecm.apply fterm ma gamma in
+    let* fa = Checker_m.apply fterm ma gamma in
     check_ec_term range fa req gamma*)
 
 
@@ -184,10 +183,10 @@ let arrow ((r1,f1): term) ((r2,f2): term): term =
     let range = Position.merge r1 r2
     in
     let f req g =
-        let* r = Ecm.type_requirement g in
+        let* r = Checker_m.type_requirement g in
         let* t1 = f1 r g in
         let* t2 = f2 r g in
-        let* arr = Ecm.arrow t1 t2 g in
+        let* arr = Checker_m.arrow t1 t2 g in
         check_ec_term range arr req g
     in
     range,
@@ -241,7 +240,7 @@ let any (range: range) (ut: universe_term option): term =
         range, (fun _ _ -> nyi range "universe level")
 
     | None ->
-        check_term range Ecm.any
+        check_term range Checker_m.any
 
 
 
@@ -249,7 +248,7 @@ let any (range: range) (ut: universe_term option): term =
 
 let name_term (range: range) (name: Name.t): term =
     let f req g =
-        let* t = Ecm.find name req g in
+        let* t = Checker_m.find name req g in
         match t with
         | None ->
             M.fail (Error.make range "not found" (assert false))
@@ -334,12 +333,10 @@ let binary_expression
 
 
 
-let formal_argument_simple (range: range) (_: Name.t): formal_argument =
-    fun _ ->
-        nyi range "formal argument without type"
-        (*let* tp = assert false
-        in
-        Ecm.push_variable false false name tp g*)
+let formal_argument_simple (range: range) (name: Name.t): formal_argument =
+    fun g ->
+        let* tp = Checker_m.missing_type range g in
+        Checker_m.push_variable false false name tp g
 
 
 
@@ -362,7 +359,7 @@ let formal_argument
         in
         Listm.fold_left
             (fun (_, n) g ->
-                 Ecm.push_variable implicit true n tp g
+                 Checker_m.push_variable implicit true n tp g
             )
             names
             g
@@ -388,7 +385,7 @@ let product_expression
                 g0
         in
         let* tp  = make_type tp g in
-        let* pi  = Ecm.make_pi tp g g0 in
+        let* pi  = Checker_m.make_pi tp g g0 in
         check_ec_term range pi req g
 
 
@@ -420,7 +417,7 @@ let add_definition
 
         (* Create an empty context *)
         let* g0 =
-            Ecm.empty_gamma elab.globals
+            Checker_m.empty_gamma elab.globals
         in
 
         (* Push formal arguments into the context *)
@@ -438,8 +435,8 @@ let add_definition
 
         | Some ((range, _) as tp), None ->
             let* tp    = make_type tp g in
-            let* tp    = Ecm.make_pi tp g g0 in
-            let* res   = Ecm.add_definition name tp None g in
+            let* tp    = Checker_m.make_pi tp g g0 in
+            let* res   = Checker_m.add_definition name tp None g in
             begin
                 match res with
                 | Ok globals ->

@@ -1,5 +1,20 @@
 open Std
 
+
+type req = {
+    rid:   int;
+    rgid:  int;
+    rglen: int;
+    rtyp:  Term.t;
+    sign:  Sign.t option;      (* only for function terms *)
+}
+
+
+
+
+
+
+
 type t
 
 module Entry:
@@ -36,6 +51,12 @@ val equal: t -> t -> bool
 
 
 val is_prefix: t -> t -> bool
+
+
+val is_valid_req: req -> t -> bool
+
+
+val type_requirement: int -> t -> req
 
 
 val typ: int -> t -> Term.pair
