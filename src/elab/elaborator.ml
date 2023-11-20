@@ -71,8 +71,9 @@ let nyi (range: range) (s: string): 'a M.t =
         Error.make
             range
             "not yet implemented"
-            Pretty.(text "<" <+> text s <+> text "> " <+>
-                    text "is not yet implemented." <+> cut <+> cut)
+            (fun () ->
+                 Pretty.(text "<" <+> text s <+> text "> " <+>
+                         text "is not yet implemented." <+> cut <+> cut))
     )
 
 
@@ -81,13 +82,15 @@ let cannot_infer_type (range: range): 'a M.t =
         Error.make
             range
             "cannot infer type"
-            Pretty.(wrap_words
-                        {| I cannot infer a type of this expression.
+            (fun () ->
+                 Pretty.(wrap_words
+                             {| I cannot infer a type of this expression.
                            Can you help me with some type annotations? |}
-                    <+> cut <+> cut
-                    )
+                         <+> cut <+> cut
+                        )
+            )
     )
-let _ = cannot_infer_type
+let _ = nyi, cannot_infer_type
 
 
 
@@ -140,7 +143,7 @@ let applyf (range: range) (f: termf) (implicit: bool) (arg: termf): termf =
     let _ = range, f, implicit, arg in
     fun gamma req ->
     let _ = gamma, req in
-    nyi range "function applicatioin"
+    assert false
 
     (*
     (* Make the two metavariables [?a: ?A] *)
@@ -353,7 +356,7 @@ let formal_argument
         let* tp =
             match tp with
             | None ->
-                assert false (* nyi *)
+                assert false (* nyi: group of variables without type *)
             | Some tp ->
                 make_type tp g
         in
@@ -443,15 +446,18 @@ let add_definition
                     return globals
                 | Error _ ->
                     M.fail (
-                        Error.make range "ambiguous definition" Pretty.empty
+                        Error.make
+                            range
+                            "ambiguous definition"
+                            (fun () -> Pretty.empty)
                     )
             end
 
-        | None,   Some (range, _) ->
-            nyi range "Definition without result type"
+        | None,   Some (_, _) ->
+            assert false (* nyi: Definition without result type *)
 
-        | Some (range, _), Some _ ->
-            nyi range "Definition with result type"
+        | Some (_, _), Some _ ->
+            assert false (* nyi: Definition with result type *)
     in
     Result.map
         (fun globals -> {globals})

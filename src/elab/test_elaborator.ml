@@ -1,3 +1,4 @@
+open Std
 open Alba_parse
 
 module Position = Fmlib_parse.Position
@@ -5,14 +6,14 @@ module Position = Fmlib_parse.Position
 module Pretty   = Fmlib_pretty.Print
 
 
-module TP = Definition_parser.Make (Error) (Elaborator)
+module TP = Definition_parser.Make (Std.Error) (Elaborator)
 
 module PL =
     Fmlib_parse.Parse_with_lexer.Make
         (Elaborator)
         (Token)
         (Unit)
-        (Definition_parser.Error (Error) (Elaborator))
+        (Definition_parser.Error (Std.Error) (Elaborator))
         (Lexer)
         (TP)
 

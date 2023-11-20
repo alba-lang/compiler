@@ -41,7 +41,7 @@ type queue =
 
 type error =
     | Blocked
-    | Normal of Error.t
+    | Normal of Std.Error.t
 
 type 'a t =
     state -> ('a, error) result
@@ -84,7 +84,7 @@ let return (a: 'a): 'a t =
     Ok a
 
 
-let fail (e: Error.t): 'a t =
+let fail (e: Std.Error.t): 'a t =
     fun _ ->
     Error (Normal e)
 

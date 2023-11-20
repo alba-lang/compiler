@@ -1,3 +1,4 @@
+open Std
 open Core
 
 (** {1 Monad} *)

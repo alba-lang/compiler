@@ -5,11 +5,11 @@ open Fmlib_pretty
 type t = {
     range: Position.range;
     tag:   string;
-    doc:   Print.doc;
+    doc:   unit -> Print.doc;
 }
 
 
-let make (range: Position.range) (tag: string) (doc: Print.doc): t =
+let make (range: Position.range) (tag: string) (doc: unit -> Print.doc): t =
     { range; tag; doc }
 
 
@@ -38,4 +38,4 @@ let tag (e: t): string =
 
 
 let doc (e: t): Print.doc =
-    e.doc
+    e.doc ()
