@@ -30,7 +30,7 @@ sig
 
     val type_requirement: gamma -> Gamma.req M.t
 
-    val missing_type: range -> gamma -> term M.t
+    val missing_type: M.meta_reason -> gamma -> term M.t
 
     val check: term -> Gamma.req -> gamma -> term option M.t
 

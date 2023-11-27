@@ -29,7 +29,7 @@ type t = {
 and entry = {
     previous: t;
     info: Info.Bind.t;
-    typ:  Term.pair;
+    typ:  Term.pair;        (* Type and the sort of the type. *)
     def:  Term.t option;
 }
 

@@ -39,3 +39,16 @@ let tag (e: t): string =
 
 let doc (e: t): Print.doc =
     e.doc ()
+
+
+let cannot_infer_type (range: Position.range): t =
+    make
+        range
+        "cannot infer type"
+        (fun () ->
+             Print.(wrap_words
+                         {| I cannot infer a type of this expression.
+                           Can you help me with some type annotations? |}
+                     <+> cut <+> cut
+                    )
+        )

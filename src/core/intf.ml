@@ -7,7 +7,10 @@ sig
 
     val new_id:      int t
     val new_context: int t
-    val new_meta: Gamma.req -> int -> int t
+
+    type meta_reason
+
+    val new_meta: meta_reason -> Gamma.req -> int -> int t
 end
 
 

@@ -5,7 +5,7 @@ module Position = Fmlib_parse.Position
 module Pretty   = Fmlib_pretty.Print
 
 
-module M   = Monad.Make (struct type t = Checker.globals end)
+module M   = Elaboration_monad.Make (struct type t = Checker.globals end)
 
 module Checker_m = Checker.Make (M)
 
@@ -78,18 +78,8 @@ let nyi (range: range) (s: string): 'a M.t =
 
 
 let cannot_infer_type (range: range): 'a M.t =
-    M.fail (
-        Error.make
-            range
-            "cannot infer type"
-            (fun () ->
-                 Pretty.(wrap_words
-                             {| I cannot infer a type of this expression.
-                           Can you help me with some type annotations? |}
-                         <+> cut <+> cut
-                        )
-            )
-    )
+    M.fail ( Error.cannot_infer_type range)
+
 let _ = nyi, cannot_infer_type
 
 
@@ -338,7 +328,11 @@ let binary_expression
 
 let formal_argument_simple (range: range) (name: Name.t): formal_argument =
     fun g ->
-        let* tp = Checker_m.missing_type range g in
+        let* tp =
+            Checker_m.missing_type
+                (Some (Error.cannot_infer_type range))
+                g
+        in
         Checker_m.push_variable false false name tp g
 
 

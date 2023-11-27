@@ -9,6 +9,8 @@ struct
     exception Done of Final.t
     exception Fail of Error.t
 
+    type meta_reason = Error.t option
+
 
 
 
@@ -56,9 +58,12 @@ struct
 
 
 
-    let new_meta (req: Gamma.req) (ctxt: int): int t =
+    let new_meta (r: meta_reason) (req: Gamma.req) (ctxt: int): int t =
         fun s k ->
-        let id = State.new_meta req ctxt s in
+        let id =
+            State.new_meta
+                (Option.map (fun e _ -> raise (Fail e)) r)
+                req ctxt s in
         k id s
 
 
@@ -75,5 +80,5 @@ struct
             assert false (* shall never happen *)
         with
         | Done final -> Ok final
-        | Fail e     -> Error e
+        | Fail e     -> Error e  (* Triggered by function [fail e] *)
 end

@@ -16,3 +16,6 @@ val column2: t -> int
 val tag:   t -> string
 
 val doc:   t -> Print.doc
+
+
+val cannot_infer_type: Position.range -> t
