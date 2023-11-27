@@ -129,14 +129,22 @@ let check_term
 
 
 
-let applyf (range: range) (f: termf) (implicit: bool) (arg: termf): termf =
-    let _ = range, f, implicit, arg in
+let applyf
+        (range: range)
+        (rf: range)
+        (f: termf)
+        (implicit: bool)
+        (rarg: range)
+        (arg: termf)
+    : termf
+    =
+    let _ = range, rf, f, implicit, rarg, arg in
     fun gamma req ->
     let _ = gamma, req in
     assert false
 
     (*
-    (* Make the two metavariables [?a: ?A] *)
+    (* Make the two metavariables [?a: ?AT] *)
     let* atreq = Checker_m.type_requirement gamma in
     let* matp  = Checker_m.make_meta atreq gamma in
     let* areq  = Checker_m.requirement_of_type matp gamma in
@@ -144,7 +152,7 @@ let applyf (range: range) (f: termf) (implicit: bool) (arg: termf): termf =
     let* _ =
         (* Spawn a task to elaborate the term [a] and fill the
          * corresponding hole. *)
-        Mon.spawn
+        M.spawn
             (
                 let* a = arg gamma areq in
                 Checker_m.fill_meta ma a gamma
@@ -283,7 +291,7 @@ let apply ((rf, f): term) (implicit: bool) ((rarg, arg): term): term =
     let range = Position.merge rf rarg
     in
     range,
-    applyf range f implicit arg
+    applyf range rf f implicit rarg arg
 
 
 
@@ -319,8 +327,9 @@ let binary_expression
     else
         let range = Position.merge r1 r2 in
         let (_, op)  = name_term r_op name in
-        let left     = applyf (Position.merge r1 r_op) op false t1f in
-        let right    = applyf range left false t2f in
+        let r_left   = Position.merge r1 r_op in
+        let left     = applyf r_left r_op op false r1 t1f in
+        let right    = applyf range r_left left false r2 t2f in
         range, right
 
 
@@ -328,9 +337,13 @@ let binary_expression
 
 let formal_argument_simple (range: range) (name: Name.t): formal_argument =
     fun g ->
+        let* req =
+            Checker_m.type_requirement g
+        in
         let* tp =
-            Checker_m.missing_type
+            Checker_m.make_meta
                 (Some (Error.cannot_infer_type range))
+                req
                 g
         in
         Checker_m.push_variable false false name tp g

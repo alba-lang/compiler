@@ -333,13 +333,10 @@ struct
 
 
 
-
-    let missing_type (r: meta_reason) (g: gamma): term t =
-        (* Make a new metavariable [?T: Top] to represent the missing type.
-         *)
-
-        let* req  = type_requirement g in
-        let* midx = M.new_meta r req (Gamma.index g) in
+    let make_meta (r: meta_reason) (req: Gamma.req) (g: gamma): term t =
+        let* midx =
+            M.new_meta r req (Gamma.index g)
+        in
         let  name =
             String.concat ""
                 ["?"
@@ -356,7 +353,6 @@ struct
                 g
             |> term_with_req req
         )
-
 
 
     let check (term: term) (req: Gamma.req) (g: gamma): term option t =
