@@ -6,14 +6,35 @@ type gamma
 
 type term
 
+type req
+
 
 type range = Fmlib_parse.Position.range
+
+
+module type MONAD =
+sig
+    include Fmlib_std.Interfaces.MONAD
+    (** @inline *)
+
+    val map: ('a -> 'b) -> 'a t -> 'b t
+
+    val new_id:      int t
+    val new_context: int t
+
+    type meta_reason
+
+    val new_meta: meta_reason -> req -> int -> int t
+end
+
 
 
 
 val gamma_length: gamma -> int
 
 val is_gamma_empty: gamma -> bool
+
+val is_valid_req: req -> gamma -> bool
 
 val is_valid_term: term -> gamma -> bool
 
@@ -24,22 +45,25 @@ val make_globals: unit -> globals
 
 
 
-module Make (M: Intf.CHECKER_MONAD):
+module Make (M: MONAD):
 sig
     val empty_gamma: globals -> gamma M.t
 
-    val type_requirement: gamma -> Gamma.req M.t
+    val type_requirement: gamma -> req M.t
 
-    val make_meta: M.meta_reason -> Gamma.req -> gamma -> term M.t
 
-    val check: term -> Gamma.req -> gamma -> term option M.t
+    val requirement_of_type: term -> gamma -> req M.t
+
+    val make_meta: M.meta_reason -> req -> gamma -> term M.t
+
+    val check: term -> req -> gamma -> term option M.t
 
     val any: gamma -> term M.t
 
 
     val arrow: term -> term -> gamma -> term M.t
 
-    val find: Name.t -> Gamma.req -> gamma -> term option M.t
+    val find: Name.t -> req -> gamma -> term option M.t
 
 
     val push_variable: bool -> bool -> Name.t -> term -> gamma -> gamma M.t

@@ -5,17 +5,6 @@ open Std
 
 
 
-type req = {
-    rid:   int;
-    rgid:  int;
-    rglen: int;
-    rtyp:  Term.t;
-    sign:  Sign.t option;      (* only for function terms *)
-}
-
-
-
-
 
 
 
@@ -115,23 +104,6 @@ let is_prefix (g0: t) (g: t): bool =
         equal g0 e.previous
 
 
-
-let is_valid_req (req: req) (g: t): bool =
-    req.rgid  = index g
-    &&
-    req.rglen = length g
-
-
-
-
-let type_requirement (rid: int) (g: t): req =
-    {
-        rid;
-        rgid  = index g;
-        rglen = length g;
-        rtyp  = Term.Top;
-        sign  = None;
-    }
 
 
 

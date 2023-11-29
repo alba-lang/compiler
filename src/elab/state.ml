@@ -19,7 +19,7 @@ and context =
     }
 
 and meta = {
-    req: Gamma.req;
+    req: Checker.req;
     mutable report: (t -> unit) option; (* optional report action, in case the
                                            metavariable cannot be instantiated.
                                          *)
@@ -59,7 +59,7 @@ let new_context (s: t): int =
 
 
 let new_meta
-        (report: (t -> unit) option) (req: Gamma.req) (ctxt: int) (s: t)
+        (report: (t -> unit) option) (req: Checker.req) (ctxt: int) (s: t)
     : int
     =
     let open Array_buffer in

@@ -58,7 +58,7 @@ struct
 
 
 
-    let new_meta (r: meta_reason) (req: Gamma.req) (ctxt: int): int t =
+    let new_meta (r: meta_reason) (req: Checker.req) (ctxt: int): int t =
         fun s k ->
         let id =
             State.new_meta

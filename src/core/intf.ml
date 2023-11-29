@@ -1,21 +1,3 @@
-module type CHECKER_MONAD =
-sig
-    include Fmlib_std.Interfaces.MONAD
-    (** @inline *)
-
-    val map: ('a -> 'b) -> 'a t -> 'b t
-
-    val new_id:      int t
-    val new_context: int t
-
-    type meta_reason
-
-    val new_meta: meta_reason -> Gamma.req -> int -> int t
-end
-
-
-
-
 module type GAMMA0 =
 sig
     type term

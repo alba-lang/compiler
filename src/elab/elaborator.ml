@@ -29,7 +29,7 @@ let return = M.return
  *)
 
 type termf =
-    Gamma.req -> Checker.gamma -> Checker.term M.t
+    Checker.req -> Checker.gamma -> Checker.term M.t
 
 
 type term =
@@ -97,7 +97,7 @@ let make_type ((_, f): term) (gamma: Checker.gamma): Checker.term M.t =
 let check_ec_term
         (range: range)
         (t:     Checker.term)
-        (req:   Gamma.req)
+        (req:   Checker.req)
         (gamma: Checker.gamma)
     : Checker.term M.t
     =
@@ -139,8 +139,30 @@ let applyf
     : termf
     =
     let _ = range, rf, f, implicit, rarg, arg in
-    fun gamma req ->
-    let _ = gamma, req in
+    fun req g ->
+    let _ = g, req in
+
+    (* Make the two metavariables [?a: ?AT] *)
+    let* m_at =
+        let* at_req =
+            Checker_m.type_requirement g
+        in
+        Checker_m.make_meta
+            (Some (Error.cannot_infer_type rarg))
+            at_req
+            g
+    in
+    let* _ =
+        let* a_req =
+            Checker_m.requirement_of_type m_at g
+        in
+        Checker_m.make_meta None a_req g
+    in
+    (* Spawn a task to elaborate the term [a] and fill the corresponding hole.
+     *)
+    (*let* _ =
+        M.spawn (assert false)
+    in*)
     assert false
 
     (*

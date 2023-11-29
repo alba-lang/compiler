@@ -1,5 +1,4 @@
 open Std
-open Intf
 
 
 
@@ -14,6 +13,23 @@ type gamma =
 
 
 
+type req = {
+    rid:   int;
+    rgid:  int;
+    rglen: int;
+    rtyp:  Term.t;
+    sign:  Sign.t option;      (* Only for function terms:
+                                  Without a signature the field [rtyp] describes
+                                  the requirement sufficiently. If there is a
+                                  signature, then the field [rtyp] is the
+                                  required type after application of sufficient
+                                  arguments. *)
+}
+
+
+
+
+
 
 type term = {
     (* A term is valid in a certain context. *)
@@ -21,8 +37,26 @@ type term = {
     tglen: int;         (* length of gamma *)
     term:  Term.t;
     typ:   Term.t;
-    req:   Gamma.req option;
+    req:   req option;
 }
+
+
+
+module type MONAD =
+sig
+    include Fmlib_std.Interfaces.MONAD
+    (** @inline *)
+
+    val map: ('a -> 'b) -> 'a t -> 'b t
+
+    val new_id:      int t
+    val new_context: int t
+
+    type meta_reason
+
+    val new_meta: meta_reason -> req -> int -> int t
+end
+
 
 
 
@@ -44,10 +78,30 @@ let global_entry (m: int) (i: int) (g: gamma): Globals.Entry.t =
 
 
 
+let is_valid_req (req: req) (g: gamma): bool =
+    req.rgid  = Gamma.index g
+    &&
+    req.rglen = Gamma.length g
+
+
+
+
+let type_requirement (rid: int) (g: gamma): req =
+    {
+        rid;
+        rgid  = Gamma.index g;
+        rglen = Gamma.length g;
+        rtyp  = Term.Top;
+        sign  = None;
+    }
+
+
+
 let is_valid_term (t: term) (g: gamma): bool =
     t.tgid = Gamma.index g
     &&
     t.tglen = Gamma.length g
+
 
 
 
@@ -70,8 +124,9 @@ let is_prefix (g0: gamma) (g: gamma): bool =
 
 
 
-let is_type_req (req: Gamma.req) (_: gamma): bool =
+let is_type_req (req: req) (_: gamma): bool =
     req.rtyp = Term.Top
+    && req.sign = None
 
 
 
@@ -103,7 +158,7 @@ let term_in (term: Term.t) (typ: Term.t) (g: gamma): term =
 
 
 
-let term_with_req (req: Gamma.req) (term: term): term =
+let term_with_req (req: req) (term: term): term =
     assert (term.req = None);
     {term with req = Some req}
 
@@ -127,7 +182,7 @@ let make_globals (): globals =
 
 (* Monadic Functions *)
 
-module Make (M: CHECKER_MONAD) =
+module Make (M: MONAD) =
 struct
     open M
 
@@ -327,13 +382,25 @@ struct
 
 
 
-    let type_requirement (g: gamma): Gamma.req t =
+    let type_requirement (g: gamma): req t =
         let* rid = new_id in
-        return (Gamma.type_requirement rid g)
+        return (type_requirement rid g)
+
+
+    let requirement_of_type (tp: term) (g: gamma): req t =
+        assert (is_type tp g);
+        let* rid = new_id in
+        return {
+            rid;
+            rgid  = Gamma.index g;
+            rglen = Gamma.length g;
+            rtyp  = tp.term;
+            sign  = None;
+        }
 
 
 
-    let make_meta (r: meta_reason) (req: Gamma.req) (g: gamma): term t =
+    let make_meta (r: meta_reason) (req: req) (g: gamma): term t =
         let* midx =
             M.new_meta r req (Gamma.index g)
         in
@@ -355,10 +422,10 @@ struct
         )
 
 
-    let check (term: term) (req: Gamma.req) (g: gamma): term option t =
+    let check (term: term) (req: req) (g: gamma): term option t =
         (* check if the term satisfies the requirement in the context *)
         assert (is_valid_term term g);
-        assert (Gamma.is_valid_req  req  g);
+        assert (is_valid_req  req  g);
 
         (* MISSING: Shortcut when the term already satisfies the requirement *)
 
@@ -397,7 +464,7 @@ struct
 
 
 
-    let find (name: Name.t) (_: Gamma.req) (g: gamma): term option t =
+    let find (name: Name.t) (_: req) (g: gamma): term option t =
         match Gamma.find_local name g with
         | Some i ->
             return (Some (
