@@ -48,9 +48,11 @@ end
 
 module Arg =
 struct
-    type t = {
-        implicit: bool;
-    }
+    type t =
+        | Normal
+        | Implicit_braced
+        | Implicit
+        | Operand
 end
 
 

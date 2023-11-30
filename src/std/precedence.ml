@@ -6,6 +6,16 @@ type assoc =
 type t = int * assoc
 
 
+
+let precedence ((p, _): t): int =
+    p
+
+
+let associativity ((_, a): t): assoc =
+    a
+
+
+
 let leaning ((p1, a1): t) ((p2, _): t): assoc =
     if p1 > p2 then
         Left
@@ -83,6 +93,9 @@ let highest_op_right: t =
 
 let application: t =
     make_left 150
+
+let highest: t =
+    make_left 160
 
 
 module Map =  Fmlib_std.Btree.Map (String)

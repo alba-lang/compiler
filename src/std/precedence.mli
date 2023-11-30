@@ -10,6 +10,16 @@ val of_string: string -> t
 (** [of_string str] The precedence of the operator [str] *)
 
 
+
+val precedence: t -> int
+(** The precedence. *)
+
+
+val associativity: t -> assoc
+(** The associativity. *)
+
+
+
 val leaning: t -> t -> assoc
 (** [leaning p1 p2] To which side leans a parse tree?
 
@@ -75,6 +85,8 @@ val highest_op_left: t
 val highest_op_right: t
 
 val application: t
+
+val highest: t
 
 
 

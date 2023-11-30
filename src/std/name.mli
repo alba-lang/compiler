@@ -15,6 +15,8 @@ val is_arrow:    t -> bool
 
 val string: t -> string
 
+val precedence: t -> Precedence.t
+
 val compare: t -> t -> int
 
 val normal: string -> t

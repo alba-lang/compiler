@@ -34,6 +34,15 @@ let string ((_, s): t): string =
     s
 
 
+let precedence ((info, _): t): Precedence.t =
+    match info with
+    | Operator p ->
+        p
+    | _ ->
+        Precedence.highest
+
+
+
 
 let normal str = Normal, str
 
