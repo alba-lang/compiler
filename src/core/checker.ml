@@ -1,3 +1,4 @@
+open Fmlib_std
 open Std
 
 
@@ -14,16 +15,11 @@ type gamma =
 
 
 type req = {
-    rid:   int;
-    rgid:  int;
-    rglen: int;
-    rtyp:  Term.t;
-    sign:  Sign.t option;      (* Only for function terms:
-                                  Without a signature the field [rtyp] describes
-                                  the requirement sufficiently. If there is a
-                                  signature, then the field [rtyp] is the
-                                  required type after application of sufficient
-                                  arguments. *)
+    rid:        int;
+    rgid:       int;
+    rglen:      int;
+    rtyp:       Term.t;                 (* result type *)
+    arg_typs:   (bool * Term.t) array;  (* argument types *)
 }
 
 
@@ -94,7 +90,7 @@ let type_requirement (rid: int) (g: gamma): req =
         rgid  = Gamma.index g;
         rglen = Gamma.length g;
         rtyp  = Term.Top;
-        sign  = None;
+        arg_typs = [||];
     }
 
 
@@ -128,7 +124,7 @@ let is_prefix (g0: gamma) (g: gamma): bool =
 
 let is_type_req (req: req) (_: gamma): bool =
     req.rtyp = Term.Top
-    && req.sign = None
+    && Array.is_empty req.arg_typs
 
 
 
@@ -229,7 +225,8 @@ struct
 
 
 
-    let unify (t1: Term.t) (_: bool) (t2: Term.t) (g: gamma): bool t =
+    let unify (t1: Term.t) (t2: Term.t) (g: gamma): bool t =
+        (* Is [t1] a subtype of [t2]? *)
         let* t1 = head_normal t1 g in
         let* t2 = head_normal t2 g in
 
@@ -245,6 +242,9 @@ struct
 
         | _, _ ->
             assert false (* nyi *)
+
+
+
 
 
 
@@ -389,6 +389,8 @@ struct
         return (type_requirement rid g)
 
 
+
+
     let requirement_of_type (tp: term) (g: gamma): req t =
         assert (is_type tp g);
         let* rid = new_id in
@@ -397,18 +399,25 @@ struct
             rgid  = Gamma.index g;
             rglen = Gamma.length g;
             rtyp  = tp.term;
-            sign  = None;
+            arg_typs  = [||];
         }
 
 
+
     let function_requirement
-            (_: bool) (* [f {a}] explicitly given implicit argument *)
-            (_: term) (* Metavariable describing the argument type *)
-            (_: req)  (* Requirement for the result type *)
-            (_: gamma)
+            (i: bool)   (* [f {a}] explicitly given implicit argument *)
+            (tp: term)  (* Metavariable describing the argument type *)
+            (req: req)  (* Requirement for the result type *)
+            (g: gamma)
         : req t
         =
-        assert false
+        assert (is_valid_req  req g);
+        assert (is_valid_term tp g);
+        assert (is_type tp g);
+        return {
+            req with
+            arg_typs = Array.push_front (i, tp.term) req.arg_typs;
+        }
 
 
 
@@ -442,16 +451,36 @@ struct
 
     let check (term: term) (req: req) (g: gamma): term option t =
         (* check if the term satisfies the requirement in the context *)
+        Printf.printf "Check term %s\n" (Term.Print.string term.term);
         assert (is_valid_term term g);
         assert (is_valid_req  req  g);
 
-        (* MISSING: Shortcut when the term already satisfies the requirement *)
+        match term.req with
+        | Some r ->
+            if r.rid = req.rid then
+                return None
+            else
+                return (Some term)
 
-        let* ok = unify term.typ true req.rtyp g in
-        if ok then
-            return (Some {term with req = Some req})
-        else
-            return None
+        | None ->
+            let uni t tp =
+                let* ok = unify t tp g in
+                if ok then
+                    return (Some {term with req = Some req})
+                else
+                    return None
+            in
+            if Array.is_empty req.arg_typs then
+                uni term.typ req.rtyp
+            else
+                (* Function requirement *)
+                let* tn = head_normal term.term g in
+                match tn with
+                | Pi ( args, _ ) ->
+                    assert (not (Array.is_empty args));
+                    assert false (* nyi *)
+                | _ ->
+                    return None
 
 
 
