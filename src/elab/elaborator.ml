@@ -133,7 +133,7 @@ let applyf
         (range: range)
         (rf: range)
         (f: termf)
-        (implicit: bool)
+        (implicit: bool)    (* [f {a}], explicitly given implicit argument *)
         (rarg: range)
         (arg: termf)
     : termf
@@ -152,40 +152,36 @@ let applyf
             at_req
             g
     in
-    let* _ =
-        let* a_req =
-            Checker_m.requirement_of_type m_at g
-        in
+    let* a_req =
+        Checker_m.requirement_of_type m_at g
+    in
+    let* m_a =
         Checker_m.make_meta None a_req g
     in
-    (* Spawn a task to elaborate the term [a] and fill the corresponding hole.
-     *)
-    (*let* _ =
-        M.spawn (assert false)
-    in*)
-    assert false
 
-    (*
-    (* Make the two metavariables [?a: ?AT] *)
-    let* atreq = Checker_m.type_requirement gamma in
-    let* matp  = Checker_m.make_meta atreq gamma in
-    let* areq  = Checker_m.requirement_of_type matp gamma in
-    let* ma    = Checker_m.make_meta areq gamma in
+    (* Elaborate the term [a] and fill the corresponding hole in a spawned task.
+     *)
     let* _ =
-        (* Spawn a task to elaborate the term [a] and fill the
-         * corresponding hole. *)
         M.spawn
             (
-                let* a = arg gamma areq in
-                Checker_m.fill_meta ma a gamma
+                let* a = arg a_req g in
+                Checker_m.fill_meta m_a a g
             )
-            ()
     in
-    (* Make the requirement for the function term *)
-    let* freq =
-        Checker_m.function_requirement implicit matp req gamma
+
+    (* Elaborate the term [f] *)
+    let* f_term =
+        (* Make the requirement for the function term *)
+        let* f_req =
+            Checker_m.function_requirement implicit m_at req g
+        in
+        f f_req g
     in
-    let* fterm = f gamma freq in
+
+    (* Elaborate [f ?a] *)
+    let* fa = Checker_m.apply f_term m_a g
+    in
+
     (* Check that the application satisfies its requirement.
 
        This extra check is neccessary, because the result type of [f ?a]
@@ -196,8 +192,7 @@ let applyf
        requirement. This check might include the insertion of additional
        implicit arguments.
     *)
-    let* fa = Checker_m.apply fterm ma gamma in
-    check_ec_term range fa req gamma*)
+    check_ec_term range fa req g
 
 
 

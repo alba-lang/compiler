@@ -72,6 +72,12 @@ let new_meta
 
 
 
+let spawn (task: t -> unit) (s: t): unit =
+    s.ready <- task :: s.ready
+
+
+
+
 let rec execute (s: t): unit =
     match s.ready with
     | [] ->

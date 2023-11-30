@@ -67,6 +67,14 @@ struct
         k id s
 
 
+    let spawn (task: unit t): unit t =
+        fun s k ->
+        State.spawn
+            (fun s -> task s (fun () _ -> ()))
+            s;
+        k () s
+
+
 
 
 

@@ -93,7 +93,7 @@ and pointer = unit (* nyi *)
 let map_de_bruijn (f: int -> int) (t: t): t =
     let rec go nb t =
         match t with
-        | Top | Prop | Any _ | Global _ ->
+        | Top | Prop | Any _ | Global _ | Meta _ ->
             t
 
         | Local (name, i) as t ->

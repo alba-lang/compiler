@@ -25,6 +25,8 @@ sig
     type meta_reason
 
     val new_meta: meta_reason -> req -> int -> int t
+
+    val spawn: unit t -> unit t
 end
 
 
@@ -54,12 +56,18 @@ sig
 
     val requirement_of_type: term -> gamma -> req M.t
 
+    val function_requirement: bool -> term -> req -> gamma -> req M.t
+
     val make_meta: M.meta_reason -> req -> gamma -> term M.t
+
+    val fill_meta: term -> term -> gamma -> unit M.t
+
 
     val check: term -> req -> gamma -> term option M.t
 
     val any: gamma -> term M.t
 
+    val apply: term -> term -> gamma -> term M.t
 
     val arrow: term -> term -> gamma -> term M.t
 

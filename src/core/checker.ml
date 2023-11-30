@@ -55,6 +55,8 @@ sig
     type meta_reason
 
     val new_meta: meta_reason -> req -> int -> int t
+
+    val spawn: unit t -> unit t
 end
 
 
@@ -399,6 +401,16 @@ struct
         }
 
 
+    let function_requirement
+            (_: bool) (* [f {a}] explicitly given implicit argument *)
+            (_: term) (* Metavariable describing the argument type *)
+            (_: req)  (* Requirement for the result type *)
+            (_: gamma)
+        : req t
+        =
+        assert false
+
+
 
     let make_meta (r: meta_reason) (req: req) (g: gamma): term t =
         let* midx =
@@ -420,6 +432,12 @@ struct
                 g
             |> term_with_req req
         )
+
+
+
+
+    let fill_meta (_: term) (_: term) (_: gamma): unit t =
+        assert false
 
 
     let check (term: term) (req: req) (g: gamma): term option t =
@@ -444,6 +462,8 @@ struct
 
 
 
+    let apply (_: term) (_: term) (_: gamma): term t =
+        assert false
 
 
     let arrow (a: term) (b: term) (g: gamma): term t =
