@@ -206,7 +206,7 @@ struct
         Name.precedence n
 
 
-    let doc_with_precedence (t: t): Print.doc * Precedence.t =
+    let rec doc_with_precedence (t: t): Print.doc * Precedence.t =
         let open Print in
         match t with
         | Top ->
@@ -224,8 +224,8 @@ struct
         | Local (n, _)  | Global (n, _, _) | Meta (n, _, _) ->
             name_with_precedence n
 
-        | Pi _ ->
-            assert false
+        | Pi (args, res) ->
+            pi 0 args res
 
         | Lam _ ->
             assert false
@@ -245,8 +245,63 @@ struct
         | Cta _ ->
             assert false
 
+
+    and pi
+            (start: int) (args: var_binder array) ((tp, _) as tp_pair: pair)
+        : Print.doc * Precedence.t
+        =
+        let len = Array.length args in
+        assert (start <= len);
+        let rec count n p =
+            assert (start + n <= len);
+            let i = start + n
+            in
+            if i < len && p (fst args.(i)) then
+                count (n + 1) p
+            else
+                n
+        in
+        if start = len then
+            doc_with_precedence tp
+        else
+            let narr =
+                count start Info.Bind.is_arrow
+            in
+            if narr = 0 then
+                let nnarr =
+                    count
+                        start
+                        (fun bnd -> not (Info.Bind.is_arrow bnd))
+                in
+                assert (nnarr > 0);
+                pi_not_arrows start nnarr args tp_pair
+            else
+                pi_arrows start narr args tp_pair
+
+    and pi_arrows
+            (start: int) (n: int) (args: var_binder array) (_: pair)
+        : Print.doc * Precedence.t
+        =
+        let len = Array.length args in
+        assert (0 < n);
+        assert (start + n <= len);
+        assert false
+
+
+    and pi_not_arrows
+            (start: int) (n: int) (args: var_binder array) (_: pair)
+        : Print.doc * Precedence.t
+        =
+        let len = Array.length args in
+        assert (0 < n);
+        assert (start + n <= len);
+        assert false
+
+
+
     let doc (t: t): Print.doc =
         fst (doc_with_precedence t)
+
 
     let string (t: t): string =
         Print.(doc t |> layout 70 |> string_of)
@@ -255,7 +310,67 @@ end
 
 
 
-(* Note [Print appplications and operator expressions]
+(*
+===================================================
+Note [Print produce types]
+===================================================
+
+    A product type is a sequence of binders and a result type. Binders can be
+    arrows (name of the formal argument cannot appear in the result type).
+
+    There might be n (e.g. 2) arrow binders:
+
+        all (_: A) (_: B) ...  is printed as    A -> B -> all ...
+
+    There might be n (e.g. 2) non-arrow binders:
+
+        all (x: A) (y: B): R
+
+    where R either is not a product or starts with arrow binders.
+
+    There are neither arrow nor non-arrow binders anymore:
+
+        R
+
+    then just print R
+
+
+    Arrow types
+
+        A -> B
+        -> C
+        -> D
+
+    Dependent types
+
+        all
+            (x: A) (y: B)
+            (z: C)
+        :
+            D
+            -> E
+            -> F
+
+    Function definitions
+
+        f
+            (x: A) (y: B)
+            (z: C)
+        :
+            D
+            -> E
+            -> F
+        :=
+            ...
+
+*)
+
+
+
+(*
+===================================================
+Note [Print appplications and operator expressions]
+===================================================
 
     Binary and unary operators are printed within parens (e.g. (+)) except when
     appearing in an operator position (e.g. x + y, x^y).
@@ -290,6 +405,13 @@ end
         leaning (+) app = Right             -- Parens required
 
 
+    Indication for parens around the function term:
+
+        leaning f app <> Left
+
+    If it is left leaning no parens are required.
+
+
 
     2. Arguments in parens
     ======================
@@ -304,7 +426,9 @@ end
 
     Indication for parens
 
-        leaning app arg = Left
+        leaning app arg <> Right
+
+    If it is right leaning no parens are required.
 
         f (g a)                 leaning app app = Left
         f (a + b)               leaning app (+) = Left
@@ -315,6 +439,25 @@ end
     3. Operands in parens
     =====================
 
-        a + b * c
+    3.1 Binary operator
+    -------------------
 
+        a op b
+
+    Indication for parens around left operand:
+
+        leaning a op <> Left
+
+    Indication for parens around right operand
+
+        leaning op b <> Right
+
+    3.2 Unary operator
+    ------------------
+
+        op a
+
+    Indication for parens around operand:
+
+        leaning op a <> Right
 *)
