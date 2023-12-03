@@ -19,6 +19,13 @@ val associativity: t -> assoc
 (** The associativity. *)
 
 
+val string_of_assoc: assoc -> string
+(** String representation of an associativity. *)
+
+
+val string_of: t -> string
+(** String representation of the precedence. *)
+
 
 val leaning: t -> t -> assoc
 (** [leaning p1 p2] To which side leans a parse tree?

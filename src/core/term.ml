@@ -200,14 +200,25 @@ end
 =
 struct
     open Fmlib_pretty
+    type doc = Print.doc
 
     let name_with_precedence (n: Name.t): Print.doc * Precedence.t =
         Print.text (Name.string n),
         Name.precedence n
 
 
-    let rec doc_with_precedence (t: t): Print.doc * Precedence.t =
-        let open Print in
+    let (<+>) = Print.(<+>)
+    let cut   = Print.cut
+    let text  = Print.text
+    let group = Print.group
+    let indent = Print.nest 4
+
+
+    let parenthesized (d: doc): doc =
+        group (text "(" <+> cut <+> indent d <+> cut <+> text ")")
+
+
+    let rec doc_with_precedence (t: t): doc * Precedence.t =
         match t with
         | Top ->
             text "Top",
@@ -246,6 +257,32 @@ struct
             assert false
 
 
+    and left_parenthesized
+            (t: t)
+            (prec: Precedence.t)            (* root precedence *)
+        : Print.doc
+        =
+        let tdoc, tprec = doc_with_precedence t
+        in
+        if Precedence.leaning tprec prec = Precedence.Left then
+            tdoc
+        else
+            parenthesized tdoc
+
+
+    and right_parenthesized
+            (prec: Precedence.t)            (* root precedence *)
+            (t: t)
+        : Print.doc
+        =
+        let tdoc, tprec = doc_with_precedence t
+        in
+        if Precedence.leaning prec tprec = Precedence.Right then
+            tdoc
+        else
+            parenthesized tdoc
+
+
     and pi
             (start: int) (args: var_binder array) ((tp, _) as tp_pair: pair)
         : Print.doc * Precedence.t
@@ -279,13 +316,48 @@ struct
                 pi_arrows start narr args tp_pair
 
     and pi_arrows
-            (start: int) (n: int) (args: var_binder array) (_: pair)
+            (start: int) (n: int) (args: var_binder array) ((res, _): pair)
         : Print.doc * Precedence.t
         =
         let len = Array.length args in
         assert (0 < n);
         assert (start + n <= len);
-        assert false
+        Printf.printf "pi_arrows start %d, n %d len %d\n" start n len ;
+        let with_arrow i doc =
+            if i = start then
+                doc
+            else
+                Print.(text "-> " <+> doc)
+        in
+        let rec go i lst =
+            assert (start <= i);
+            if i = start then
+                lst
+            else
+                let i = i - 1 in
+                let bnd, (tp, _) = args.(i) in
+                assert (Info.Bind.is_arrow bnd);
+                go
+                    i
+                    (
+                        (left_parenthesized
+                            tp
+                            Precedence.arrow
+                         |> with_arrow i)
+                        ::
+                        lst
+                    )
+        in
+        Print.pack
+            " "
+            (go
+                 (start + n)
+                 [
+                     right_parenthesized Precedence.arrow res
+                     |> with_arrow (start + n)
+                 ])
+        ,
+        Precedence.arrow
 
 
     and pi_not_arrows

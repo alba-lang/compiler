@@ -6,6 +6,14 @@ type assoc =
 type t = int * assoc
 
 
+let string_of_assoc: assoc -> string = function
+    | Left -> "Left"
+    | Right -> "Right"
+    | No -> "No"
+
+
+let string_of ((p, a): t): string =
+    "(" ^ string_of_int p ^ "," ^ string_of_assoc a ^ ")"
 
 let precedence ((p, _): t): int =
     p

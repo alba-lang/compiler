@@ -576,6 +576,7 @@ struct
             assert (len0 < len);
             let nargs = len - len0
             in
+            Printf.printf "Checker.make_pi nargs %d\n" nargs;
             (* MISSING:!!!!!
                     Stripping of metavariables not valid in [g0].
             *)
