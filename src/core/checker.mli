@@ -9,6 +9,8 @@ type term
 type req
 
 
+
+
 type range = Fmlib_parse.Position.range
 
 
@@ -27,6 +29,17 @@ sig
     val new_meta: meta_reason -> req -> int -> int t
 
     val spawn: unit t -> unit t
+end
+
+
+
+
+
+
+
+module Print:
+sig
+    val not_check: term -> req -> gamma -> unit -> Fmlib_pretty.Print.doc
 end
 
 

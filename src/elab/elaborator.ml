@@ -101,15 +101,15 @@ let check_ec_term
         (gamma: Checker.gamma)
     : Checker.term M.t
     =
-    let* t = Checker_m.check t req gamma in
-    match t with
+    let* t_opt = Checker_m.check t req gamma in
+    match t_opt with
     | Some t ->
         return t
     | _ ->
         M.fail (Error.make
                       range
                       "expression has illegal type"
-                      (assert false))
+                      (Checker.Print.not_check t req gamma))
 
 
 

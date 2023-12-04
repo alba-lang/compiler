@@ -13,15 +13,53 @@ type gamma =
     Gamma.t
 
 
+module Req =
+struct
+    type t = {
+        rid:        int;
+        rgid:       int;
+        rglen:      int;
+        rtyp:       Term.t;                 (* result type *)
+        arg_typs:   (bool * Term.t) array;  (* argument types *)
+    }
 
-type req = {
-    rid:        int;
-    rgid:       int;
-    rglen:      int;
-    rtyp:       Term.t;                 (* result type *)
-    arg_typs:   (bool * Term.t) array;  (* argument types *)
-}
+    let is_normal (req: t): bool =
+        (* Is the requirement a required type for a term? *)
+        Array.is_empty req.arg_typs
 
+
+    let is_function_type (req: t): bool =
+        not (Array.is_empty req.arg_typs)
+
+
+    let is_type (req: t): bool =
+        (* Is the requirement for a type term? *)
+        is_normal req
+        &&
+        req.rtyp = Term.Top
+
+
+    let argument_type (req: t): Term.t =
+        assert (is_function_type req);
+        snd req.arg_typs.(0) (* MISSING: Correct handling of implicit arguments
+                             *)
+
+
+    let of_type (rid: int) (rtyp: Term.t) (g: gamma): t =
+        {
+            rid;
+            rgid  = Gamma.index g;
+            rglen = Gamma.length g;
+            rtyp;
+            arg_typs  = [||];
+        }
+
+    let type_requirement (rid: int) (g: gamma): t =
+        of_type rid Term.Top g
+end
+
+
+type req = Req.t
 
 
 
@@ -35,6 +73,7 @@ type term = {
     typ:   Term.t;
     req:   req option;
 }
+
 
 
 
@@ -84,15 +123,6 @@ let is_valid_req (req: req) (g: gamma): bool =
 
 
 
-let type_requirement (rid: int) (g: gamma): req =
-    {
-        rid;
-        rgid  = Gamma.index g;
-        rglen = Gamma.length g;
-        rtyp  = Term.Top;
-        arg_typs = [||];
-    }
-
 
 
 let is_valid_term (t: term) (g: gamma): bool =
@@ -122,15 +152,10 @@ let is_prefix (g0: gamma) (g: gamma): bool =
 
 
 
-let is_type_req (req: req) (_: gamma): bool =
-    req.rtyp = Term.Top
-    && Array.is_empty req.arg_typs
 
 
 
-
-
-let is_type (t: term) (g: gamma): bool =
+let is_type (t: term) (_: gamma): bool =
     (* Does the term [t] satisfy a type requirement.
 
        Note: The term might be a type, but it has not yet been checked that it
@@ -141,7 +166,7 @@ let is_type (t: term) (g: gamma): bool =
     | None ->
         false
     | Some req ->
-        is_type_req req g
+        Req.is_type req
 
 
 
@@ -172,13 +197,74 @@ let make_globals (): globals =
 
 
 
+(*
+============================================================
+Printing Errors
+============================================================
+ *)
+
+
+
+
+module Print:
+sig
+    val not_check:
+        term -> req -> gamma -> unit -> Fmlib_pretty.Print.doc
+end
+=
+struct
+    open Fmlib_pretty
+
+    let indent (d: Print.doc): Print.doc =
+        Print.nest 4 d
+
+    let not_check_function
+            (t: term) (req: req) (_: gamma)
+        : Print.doc
+        =
+        let open Print in
+        [
+            wrap_words "The term has type" <+> cut
+            ;
+            Term.Print.doc t.typ <+> cut |> indent
+            ;
+            wrap_words
+                "but should it have a function type accepting at least one \
+                 argument of type" <+> cut
+            ;
+            Req.argument_type req |> Term.Print.doc <+> cut |> indent
+
+        ]
+        |> paragraphs
+
+
+
+    let not_check
+            (t: term) (req: req) (g: gamma) ()
+        : Print.doc
+        =
+        if Req.is_normal req then
+            assert false
+        else if Req.is_function_type req then
+            not_check_function t req g
+        else
+            assert false
+end
 
 
 
 
 
 
-(* Monadic Functions *)
+
+
+
+
+(*
+============================================================
+Monadic Functions
+============================================================
+ *)
 
 module Make (M: MONAD) =
 struct
@@ -386,7 +472,7 @@ struct
 
     let type_requirement (g: gamma): req t =
         let* rid = new_id in
-        return (type_requirement rid g)
+        return (Req.type_requirement rid g)
 
 
 
@@ -394,14 +480,7 @@ struct
     let requirement_of_type (tp: term) (g: gamma): req t =
         assert (is_type tp g);
         let* rid = new_id in
-        return {
-            rid;
-            rgid  = Gamma.index g;
-            rglen = Gamma.length g;
-            rtyp  = tp.term;
-            arg_typs  = [||];
-        }
-
+        return (Req.of_type rid tp.term g)
 
 
     let function_requirement
@@ -451,16 +530,16 @@ struct
 
     let check (term: term) (req: req) (g: gamma): term option t =
         (* check if the term satisfies the requirement in the context *)
-        Printf.printf "Check term %s\n" (Term.Print.string term.term);
+        Printf.printf "Check term: %s\n" (Term.Print.string term.term);
         assert (is_valid_term term g);
         assert (is_valid_req  req  g);
 
         match term.req with
         | Some r ->
             if r.rid = req.rid then
-                return None
-            else
                 return (Some term)
+            else
+                return None
 
         | None ->
             let uni t tp =
@@ -576,7 +655,6 @@ struct
             assert (len0 < len);
             let nargs = len - len0
             in
-            Printf.printf "Checker.make_pi nargs %d\n" nargs;
             (* MISSING:!!!!!
                     Stripping of metavariables not valid in [g0].
             *)
