@@ -221,16 +221,20 @@ struct
     let rec doc_with_precedence (t: t): doc * Precedence.t =
         match t with
         | Top ->
-            text "Top",
-            Precedence.highest
+            text "Any max",
+            Precedence.application
 
         | Prop ->
             text "Prop",
             Precedence.highest
 
         | Any i ->
-            text ("Any " ^ string_of_int i),
-            Precedence.application
+            if i = 0 then
+                text "Any"
+              , Precedence.highest
+            else
+                text ("Any " ^ string_of_int i)
+                , Precedence.application
 
         | Local (n, _)  | Global (n, _, _) | Meta (n, _, _) ->
             name_with_precedence n
