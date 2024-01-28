@@ -1,3 +1,6 @@
+val count_cond: int -> ('a -> bool) -> 'a array -> int
+
+
 module Make (M: Fmlib_std.Interfaces.MONAD):
 sig
     val mapi: (int -> 'a -> 'b M.t) -> 'a array -> 'b array M.t

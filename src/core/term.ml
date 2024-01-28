@@ -32,14 +32,14 @@ type t =
           * int Name_map.t
 
     (* pattern match *)
-    | Case of var_binder
-              * clause array
-              * tree
+    | Case of var_binder array  (** pattern variables *)
+              * clause array    (** clauses *)
+              * tree            (** case tree *)
 
     | Cta  of
-          t         (* refers to pattern match expression *)
-          * tree    (* case tree *)
-          * pointer (* pointer into arguments *)
+          t         (** refers to pattern match expression *)
+          * tree    (** case tree *)
+          * pointer (** pointer into arguments (including arguments) *)
 
 
 and pair = t * t    (* usually a term and its type or a type and its sort *)
@@ -326,7 +326,6 @@ struct
         let len = Array.length args in
         assert (0 < n);
         assert (start + n <= len);
-        Printf.printf "pi_arrows start %d, n %d len %d\n" start n len ;
         let with_arrow i doc =
             if i = start then
                 doc

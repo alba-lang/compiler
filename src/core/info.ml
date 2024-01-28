@@ -42,6 +42,10 @@ struct
 
     let is_implicit (b: t): bool =
         b.implicit
+
+
+    let is_explicit (b: t): bool =
+        not b.implicit
 end
 
 

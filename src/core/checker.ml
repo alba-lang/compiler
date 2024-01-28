@@ -13,6 +13,8 @@ type gamma =
     Gamma.t
 
 
+
+
 module Req =
 struct
     type t = {
@@ -30,6 +32,22 @@ struct
 
     let is_function_type (req: t): bool =
         not (Array.is_empty req.arg_typs)
+
+
+    let n_implicits (req: t): int =
+        Array_plus.count_cond
+            0
+            fst
+            req.arg_typs
+
+
+    let has_explicit_argument (n_implicits: int) (req: t): bool =
+        let nargs = Array.length req.arg_typs
+        in
+        assert (n_implicits <= nargs);
+        n_implicits < nargs
+        &&
+        not (fst req.arg_typs.(n_implicits))
 
 
     let is_type (req: t): bool =
@@ -74,6 +92,8 @@ type term = {
     req:   req option;
 }
 
+
+type doc = Fmlib_pretty.Print.doc
 
 
 
@@ -180,6 +200,16 @@ let term_in (term: Term.t) (typ: Term.t) (g: gamma): term =
     }
 
 
+let term_req_in (term: Term.t) (typ: Term.t) (req: Req.t) (g: gamma): term =
+    {
+        tgid  = Gamma.index g;
+        tglen = Gamma.length g;
+        term;
+        typ;
+        req = Some req;
+    }
+
+
 
 let term_with_req (req: req) (term: term): term =
     assert (term.req = None);
@@ -272,7 +302,7 @@ struct
 
     module Intm   = Intm.Make (M)
 
-    module Arraym = Arraym.Make (M)
+    module Arraym = Array_plus.Make (M)
 
     module Optm =
     struct
@@ -282,6 +312,30 @@ struct
             | Some a     ->
                 let* b = f a in
                 return (Some b)
+    end
+
+    module Res =
+    struct
+        type 'a t = ('a, unit -> doc) result M.t
+
+        let return (a: 'a): 'a t =
+            M.return (Ok a)
+
+
+        let fail (e: unit -> doc): 'a t =
+            M.return (Error e)
+
+        let ( let* ) (m: 'a t) (f: 'a -> 'b t): 'b t =
+            M.(
+                let* r = m in
+                match r with
+                | Ok a ->
+                    f a
+                | Error _ as r ->
+                    return r
+            )
+
+        let _ = return, fail, ( let* )
     end
 
 
@@ -298,36 +352,104 @@ struct
     (* Internal Functions with Raw Terms *)
 
 
-
-
-    let head_normal (t: Term.t) (_: gamma): Term.t t =
+    let head_normal_base
+            (with_meta: bool )
+            (t: Term.t)
+            (_: gamma)
+        : Term.t t
+        =
         match t with
         | Prop | Any _ | Top | Pi _ | Lam _ | Type _
-        | Local _ | Global _ | Meta _ ->
+        | Local _ | Global _ ->
             return t
+
+        | Meta _ ->
+            if with_meta then
+                return t
+            else
+                assert false (* nyi: wait for instantiation *)
 
         | _ ->
             assert false (* nyi *)
 
 
+    let head_normal (t: Term.t) (g: gamma): Term.t t =
+        head_normal_base true t g
 
-    let unify (t1: Term.t) (t2: Term.t) (g: gamma): bool t =
+
+
+    let head_normal_wait (t: Term.t) (g: gamma): Term.t t =
+        head_normal_base false t g
+
+
+
+    let normalize_function_type
+            (_: int)
+            (tp: Term.t)
+            (g: gamma)
+        : Term.t t
+        =
+        let is_implicit (bnd, _) = Info.Bind.is_implicit bnd
+        in
+        let* tp = head_normal_wait tp g
+        in
+        match tp with
+        | Pi (args, _) ->
+
+            let len      = Array.length args in
+            let ni_act   = Array_plus.count_cond 0 is_implicit args
+            in
+            if ni_act = len then
+                (* analyze result type *)
+                assert false
+            else
+                return tp
+
+        | _ as tp ->
+
+            return tp
+
+
+
+
+    let rec unify (t1: Term.t) (t2: Term.t) (g: gamma): bool t =
         (* Is [t1] a subtype of [t2]? *)
         let* t1 = head_normal t1 g in
         let* t2 = head_normal t2 g in
 
         match t1, t2 with
         | Prop, Prop | Prop, Any _ | Prop, Top ->
+
             return true
 
         | Any i, Any j when i <= j ->
+
             return true
 
         | Any _, Top ->
+
             return true
+
+        | Meta (_, _, _), Meta (_, _, _) ->
+
+            assert false (* nyi *)
+
+        | Meta (_, len, id), t2 ->
+
+            unify_meta len id t2 g
+
+        | _, Meta (_, _, _) ->
+            assert false (* nyi *)
+
+        | Pi (_, _), Pi (_, _) ->
+            assert false (* nyi *)
 
         | _, _ ->
             assert false (* nyi *)
+
+
+    and unify_meta (_: int) (_: int) (_: Term.t) (_: gamma): bool t =
+        assert false
 
 
 
@@ -455,6 +577,64 @@ struct
 
 
 
+    let check_function_term
+            (_: range)
+            (t: term)
+            (req: req)
+            (g: gamma)
+        : term t
+        =
+        assert (Req.is_function_type req);
+        let ni_req   = Req.n_implicits req in
+        let expl_req = Req.has_explicit_argument ni_req req
+        in
+        let* tp = normalize_function_type ni_req t.typ g
+        in
+        match tp with
+        | Pi (args, _) as tp ->
+            let _ = term_req_in in  (* DELETE *)
+            let nargs = Array.length args
+            in
+            let ni_act =
+                Array_plus.count_cond
+                    0
+                    (fun (bnd, _) -> Info.Bind.is_implicit bnd)
+                    args
+            in
+            let expl_act =
+                ni_act < nargs
+                && Info.Bind.is_explicit (fst args.(ni_act))
+            in
+            if ni_act < ni_req then
+
+                (* error: too few implicit arguments *)
+                assert false (* nyi *)
+
+            else if expl_req && not expl_act then
+
+                (* error: no explicit argument *)
+                assert false (* nyi *)
+
+            else if ni_req < ni_act then
+
+                (* fill with metavariables *)
+                assert false (* nyi *)
+
+            else
+                let (_, (arg_tp, _)) = args.(0) in
+                let* ok = unify (Req.argument_type req) arg_tp g in
+                if ok then
+                    return (term_req_in t.term tp req g)
+                else
+                    (* error: actual argument type does not conform to the
+                     * argument type of the function term *)
+                    assert false
+        | _ ->
+            (* error: term does not have a function type *)
+            assert false
+
+
+
 
 
     (* External Functions *)
@@ -528,53 +708,51 @@ struct
         assert false
 
 
-    let check (term: term) (req: req) (g: gamma): term option t =
+    let check (range: range) (term: term) (req: req) (g: gamma): term t =
         (* check if the term satisfies the requirement in the context *)
         Printf.printf "Check term: %s\n" (Term.Print.string term.term);
         assert (is_valid_term term g);
         assert (is_valid_req  req  g);
 
-        match term.req with
-        | Some r ->
-            if r.rid = req.rid then
-                return (Some term)
-            else
-                return None
-
-        | None ->
+        let check () =
             let uni t tp =
                 let* ok = unify t tp g in
                 if ok then
-                    return (Some {term with req = Some req})
+                    return {term with req = Some req}
                 else
-                    return None
+                    return (assert false)
             in
-            if Array.is_empty req.arg_typs then
+            if Req.is_normal req then
                 uni term.typ req.rtyp
-            else
+            else if Req.is_function_type req then
                 (* Function requirement *)
-                let* tn = head_normal term.term g in
-                match tn with
-                | Pi ( args, _ ) ->
-                    assert (not (Array.is_empty args));
-                    assert false (* nyi *)
-                | _ ->
-                    return None
+                check_function_term range term req g
+            else
+                assert false (* nyi: supertype *)
+        in
+        match term.req with
+        | Some r ->
+            if r.rid = req.rid then
+                return term
+            else
+                check ()
+
+        | None ->
+            check ()
 
 
 
 
-
-    let any (gamma: gamma): term t =
+    let any (gamma: gamma): term M.t =
         return (term_in (Term.Any 0) (Term.Any 1) gamma)
 
 
 
-    let apply (_: term) (_: term) (_: gamma): term t =
+    let apply (_: term) (_: term) (_: gamma): term M.t =
         assert false
 
 
-    let arrow (a: term) (b: term) (g: gamma): term t =
+    let arrow (a: term) (b: term) (g: gamma): term M.t =
         assert (is_valid_term a g);
         assert (is_valid_term b g);
         assert (is_type a g);
@@ -592,7 +770,7 @@ struct
 
 
 
-    let find (name: Name.t) (_: req) (g: gamma): term option t =
+    let find (name: Name.t) (_: req) (g: gamma): term option M.t =
         match Gamma.find_local name g with
         | Some i ->
             return (Some (
@@ -631,7 +809,7 @@ struct
             (name: Name.t)
             (tp: term)
             (g: gamma)
-        : gamma t
+        : gamma M.t
         =
         assert (is_type tp g);
         let bnd = Info.Bind.make name implicit with_type
@@ -642,7 +820,7 @@ struct
 
 
 
-    let make_pi (tp: term) (g: gamma) (g0: gamma): term t =
+    let make_pi (tp: term) (g: gamma) (g0: gamma): term M.t =
         assert (is_valid_term tp g);
         assert (is_prefix g0 g);
         assert (is_type tp g);
@@ -681,7 +859,7 @@ struct
 
     let add_definition
             (name: Name.t) (tp: term) (bdy: term option) (g: gamma)
-        : (globals, term) result t
+        : (globals, term) result M.t
         =
         assert (is_gamma_empty g);
         assert (is_valid_term tp g);
@@ -701,3 +879,27 @@ struct
                 (Globals.add e (Gamma.globals g))
         )
 end
+
+
+(* Note [Possible Errors in Normalizing a Function Type]
+
+    Situation:
+        A term is applied to [ni_req] explicitly given implicit arguments
+        followed by an optional explicit argument. The term has type [typ]. This
+        requires that [typ] reduces to the form
+
+            all {a1: A1} .. {an: An} (e: E): ....
+
+        where [ni_req <= n] and [e] is present if an explicit argument is
+        present. This makes sense only if there is at least one argument, either
+        an explicitly given implicit argument or an explicit argument.
+
+    Possible errors:
+
+        - The type [typ] does not reduce to a function type.
+
+        - The type [typ] has not sufficient implicit arguments after reduction.
+
+        - The type [typ] has sufficient implict arguments, but no explicit
+        argument and an explicit argument is present.
+*)

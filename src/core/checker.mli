@@ -8,10 +8,10 @@ type term
 
 type req
 
-
-
+type doc = Fmlib_pretty.Print.doc
 
 type range = Fmlib_parse.Position.range
+
 
 
 module type MONAD =
@@ -76,7 +76,7 @@ sig
     val fill_meta: term -> term -> gamma -> unit M.t
 
 
-    val check: term -> req -> gamma -> term option M.t
+    val check: range -> term -> req -> gamma -> term M.t
 
     val any: gamma -> term M.t
 

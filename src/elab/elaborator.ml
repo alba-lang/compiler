@@ -18,7 +18,6 @@ type 'a located = range * 'a
 
 let ( let* ) = M.( let* )
 
-let return = M.return
 
 
 
@@ -94,24 +93,6 @@ let make_type ((_, f): term) (gamma: Checker.gamma): Checker.term M.t =
 
 
 
-let check_ec_term
-        (range: range)
-        (t:     Checker.term)
-        (req:   Checker.req)
-        (gamma: Checker.gamma)
-    : Checker.term M.t
-    =
-    let* t_opt = Checker_m.check t req gamma in
-    match t_opt with
-    | Some t ->
-        return t
-    | _ ->
-        M.fail (Error.make
-                      range
-                      "expression has illegal type"
-                      (Checker.Print.not_check t req gamma))
-
-
 
 
 let check_term
@@ -121,7 +102,7 @@ let check_term
     =
     let f req gamma =
         let* t = f gamma in
-        check_ec_term range t req gamma
+        Checker_m.check range t req gamma
     in
     range, f
 
@@ -192,7 +173,7 @@ let applyf
        requirement. This check might include the insertion of additional
        implicit arguments.
     *)
-    check_ec_term range fa req g
+    Checker_m.check range fa req g
 
 
 
@@ -205,7 +186,7 @@ let arrow ((r1,f1): term) ((r2,f2): term): term =
         let* t1 = f1 r g in
         let* t2 = f2 r g in
         let* arr = Checker_m.arrow t1 t2 g in
-        check_ec_term range arr req g
+        Checker_m.check range arr req g
     in
     range,
     f
@@ -271,7 +252,7 @@ let name_term (range: range) (name: Name.t): term =
         | None ->
             M.fail (Error.make range "not found" (assert false))
         | Some t ->
-            check_ec_term range t req g
+            Checker_m.check range t req g
     in
     range, f
 
@@ -413,7 +394,7 @@ let product_expression
         in
         let* tp  = make_type tp g in
         let* pi  = Checker_m.make_pi tp g g0 in
-        check_ec_term range pi req g
+        Checker_m.check range pi req g
 
 
 

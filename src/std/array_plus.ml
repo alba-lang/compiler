@@ -1,3 +1,15 @@
+let count_cond (start: int) (p: 'a -> bool) (arr: 'a array): int =
+    let len = Array.length arr
+    in
+    let rec go i =
+        if i < len && p arr.(i) then
+            go (i + 1)
+        else
+            i - start
+    in
+    go start
+
+
 module Make (M: Fmlib_std.Interfaces.MONAD) =
 struct
     open M
