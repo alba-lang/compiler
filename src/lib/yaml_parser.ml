@@ -703,7 +703,7 @@ open Make (String)
 
 let write_errors (source: string) (p: Parser.t): unit =
     let open Parser in
-    assert (has_result p);
+    assert (has_ended p);
     assert (not (has_succeeded p));
     let module Reporter = Error_reporter.Make (Parser) in
     Reporter.make Error.range Error.doc p

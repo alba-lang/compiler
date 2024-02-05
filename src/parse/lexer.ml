@@ -349,10 +349,12 @@ struct
         include Basic.Parser
 
         let start: t =
-            make_partial () token
+            make_partial Position.start () token
 
         let restart (lex: t): t =
-            restart_partial token lex
+            assert (has_succeeded lex);
+            assert (not (has_consumed_end lex));
+            make_partial (position lex) () token |> transfer_lookahead lex
     end
 end
 
