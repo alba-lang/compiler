@@ -32,13 +32,14 @@ type t =
           * int Name_map.t
 
     (* pattern match *)
-    | Case of var_binder array  (** pattern variables *)
+    | Case of var_binder        (** function variable (for recursion) *)
               * clause array    (** clauses *)
               * tree            (** case tree *)
 
     | Cta  of
           t         (** refers to pattern match expression *)
           * tree    (** case tree *)
+          * t array (** collected subterms of the arguments *)
           * pointer (** pointer into arguments (including arguments) *)
 
 
