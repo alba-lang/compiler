@@ -74,8 +74,7 @@ and pattern =
     | Pmake of int * pattern array
 
 and tree =
-    | Rhs of t
-    | Catch_all of tree
+    | Rhs of t * int * int array (* rhs, clause number, used arguments *)
     | Node of tree Name_map.t * tree option
 
 and pointer = unit (* nyi *)
