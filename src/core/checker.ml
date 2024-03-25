@@ -256,13 +256,13 @@ struct
         [
             wrap_words "The term has type" <+> cut
             ;
-            Term.Print.doc t.typ <+> cut |> indent
+            Print_term.doc t.typ <+> cut |> indent
             ;
             wrap_words
                 "but should it have a function type accepting at least one \
                  argument of type" <+> cut
             ;
-            Req.argument_type req |> Term.Print.doc <+> cut |> indent
+            Req.argument_type req |> Print_term.doc <+> cut |> indent
 
         ]
         |> paragraphs
@@ -412,44 +412,85 @@ struct
 
 
 
-    let rec unify (t1: Term.t) (t2: Term.t) (g: gamma): bool t =
-        (* Is [t1] a subtype of [t2]? *)
-        let* t1 = head_normal t1 g in
-        let* t2 = head_normal t2 g in
-
-        match t1, t2 with
-        | Prop, Prop | Prop, Any _ | Prop, Top ->
-
-            return true
-
-        | Any i, Any j when i <= j ->
-
-            return true
-
-        | Any _, Top ->
-
-            return true
-
-        | Meta (_, _, _), Meta (_, _, _) ->
-
-            assert false (* nyi *)
-
-        | Meta (_, len, id), t2 ->
-
-            unify_meta len id t2 g
-
-        | _, Meta (_, _, _) ->
-            assert false (* nyi *)
-
-        | Pi (_, _), Pi (_, _) ->
-            assert false (* nyi *)
-
-        | _, _ ->
-            assert false (* nyi *)
 
 
-    and unify_meta (_: int) (_: int) (_: Term.t) (_: gamma): bool t =
-        assert false
+
+
+    (* Unification
+       ============================================================
+     *)
+    module Unify =
+    struct
+        (*type res =
+            | Yes
+            | Maybe
+            | No*)
+
+
+        let rec sub (t1: Term.t) (t2: Term.t) (g: gamma): bool t =
+            (* Is [t1] a subtype of [t2]? *)
+            uni t1 true t2 g
+
+
+        (*and eqv (t1: Term.t) (t2: Term.t) (g: gamma): bool t =
+            (* Is [t1] equivalent to [t2]? *)
+            uni t1 false t2 g*)
+
+        and uni (t1: Term.t) (subtype: bool) (t2: Term.t) (g: gamma): bool t =
+
+            let* t1 = head_normal t1 g in
+            let* t2 = head_normal t2 g in
+
+            match t1, t2 with
+
+            | Prop,   Prop
+            | Top,    Top ->
+
+                return true
+
+            | Prop,   Any _
+            | Prop,   Top
+            | Any _,  Top ->
+
+                return subtype
+
+            | Top,   Any _
+            | Top,   Prop
+            | Any _, Prop ->
+
+                return false
+
+            | Any i, Any j ->
+
+                return (i = j || (subtype && i < j))
+
+            | Pi  _,  Lam _
+            | Lam _,  Pi   _  ->
+
+                return false
+
+            | Meta (_, _, _), Meta (_, _, _) ->
+
+                assert false (* nyi *)
+
+            | Meta (_, len, id), t2 ->
+
+                meta len id t2 g
+
+            | _, Meta (_, _, _) ->
+                assert false (* nyi *)
+
+            | Pi (_, _), Pi (_, _) ->
+                assert false (* nyi *)
+
+            | _, _ ->
+                assert false (* nyi *)
+
+
+        and meta (_: int) (_: int) (_: Term.t) (_: gamma): bool t =
+            assert false
+    end
+
 
 
 
@@ -622,7 +663,7 @@ struct
 
             else
                 let (_, (arg_tp, _)) = args.(0) in
-                let* ok = unify (Req.argument_type req) arg_tp g in
+                let* ok = Unify.sub (Req.argument_type req) arg_tp g in
                 if ok then
                     return (term_req_in t.term tp req g)
                 else
@@ -710,13 +751,13 @@ struct
 
     let check (range: range) (term: term) (req: req) (g: gamma): term t =
         (* check if the term satisfies the requirement in the context *)
-        Printf.printf "Check term: %s\n" (Term.Print.string term.term);
+        Printf.printf "Check term: %s\n" (Print_term.string term.term);
         assert (is_valid_term term g);
         assert (is_valid_req  req  g);
 
         let check () =
             let uni t tp =
-                let* ok = unify t tp g in
+                let* ok = Unify.sub t tp g in
                 if ok then
                     return {term with req = Some req}
                 else
