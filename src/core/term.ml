@@ -3,7 +3,14 @@ open Std
 
 
 
-(* Type definition *)
+(*
+================================================================================
+
+Type definition
+
+================================================================================
+*)
+
 
 type t =
     (* sorts *)
@@ -47,11 +54,27 @@ and pair = t * t    (* usually a term and its type or a type and its sort *)
 
 and tp  = t  (* synonym *)
 
-and var_binder = Info.Bind.t * pair         (* type *)
 
-and let_binder = Info.Bind.t * pair * t     (* type + definition term *)
 
+(* Binders
+----------------------------------------------------------------------
+*)
+and var_binder = Info.Bind.t * pair         (* type, sort *)
+
+and let_binder = Info.Bind.t * pair * t     (* type, sort, definition term *)
+
+
+
+(* Argument for Function Application
+----------------------------------------------------------------------
+*)
 and argument = Info.Arg.t * t
+
+
+
+(* Inductive Types
+----------------------------------------------------------------------
+*)
 
 and constructor =
     Name.t
@@ -62,6 +85,11 @@ and constructor_arg =
     Info.Bind.t
     * var_binder array
     * t
+
+
+(* Pattern Match
+----------------------------------------------------------------------
+*)
 
 and clause =
     var_binder array (* pattern variables *)

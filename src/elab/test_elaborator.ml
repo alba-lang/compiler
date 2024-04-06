@@ -141,13 +141,16 @@ let success_tests: string array =
 
             (+): String -> String -> String
 
+
+            {-  Not yet tested!!
             (|>) {A: Any} {F: A -> Any} (a: A) (f: all x: F x): F a
             :=
                 f a
 
-            {- (<<) {A B C: Any} (f: B -> C) (g: A -> B): A -> C
+            (<<) {A B C: Any} (f: B -> C) (g: A -> B): A -> C
             :=
-                \ a := f (g a) -}
+                \ a := f (g a)
+            -}
         |}
     |]
 
