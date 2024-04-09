@@ -3,6 +3,11 @@ test:
 	dune runtest
 
 
+.PHONY: build
+build:
+	dune build
+
+
 .PHONY: parse
 parse:
 	dune runtest ./src/parse
