@@ -1,6 +1,5 @@
 module type ELAB_MONAD =
 sig
-    type range
     type _ t
     val return: 'a -> 'a t
     val ( let* ): 'a t -> ('a -> 'b t) -> 'b t
@@ -15,6 +14,8 @@ struct
         Gamma.t * Term.t * Term.t * Term.t
 
     type gamma
+
+    type meta (* Represents a metavariable *)
 
     type goal (* A term with a metavariable as its head and a requirement *)
 end
