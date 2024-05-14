@@ -120,6 +120,8 @@ let applyf
     : termf
     =
     let _ = range, rf, f, implicit, rarg, arg in
+    assert false
+    (*
     fun req g ->
     let _ = g, req in
 
@@ -174,6 +176,7 @@ let applyf
        implicit arguments.
     *)
     Checker_m.check range fa req g
+    *)
 
 
 
@@ -285,11 +288,15 @@ let list_term (_: range) (_: term list): term =
     assert false
 
 
+let apply (_: term) (_: (bool * term) list): term =
+    assert false
+
+(*
 let apply ((rf, f): term) (implicit: bool) ((rarg, arg): term): term =
     let range = Position.merge rf rarg
     in
     range,
-    applyf range rf f implicit rarg arg
+    applyf range rf f implicit rarg arg*)
 
 
 

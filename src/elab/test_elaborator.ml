@@ -5,23 +5,24 @@ module Position = Fmlib_parse.Position
 
 module Pretty   = Fmlib_pretty.Print
 
+module Elab = Elaborator
 
-module TP = Definition_parser.Make (Std.Error) (Elaborator)
+module TP = Definition_parser.Make (Std.Error) (Elab)
 
 module PL =
     Fmlib_parse.Parse_with_lexer.Make
-        (Elaborator)
+        (Elab)
         (Token)
         (Unit)
-        (Definition_parser.Error (Std.Error) (Elaborator))
+        (Definition_parser.Error (Std.Error) (Elab))
         (Lexer)
         (TP)
 
 
 
 
-let elab: Elaborator.t =
-    Elaborator.make ()
+let elab: Elab.t =
+    Elab.make ()
 
 let lexer: Lexer.t =
     Lexer.start
