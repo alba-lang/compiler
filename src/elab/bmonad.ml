@@ -5,7 +5,7 @@ module type ANY = Fmlib_std.Interfaces.ANY
 module State (Meta: ANY) (Value: ANY) (Final: ANY) =
 struct
     type t = {
-        mutable ready: ready_task list;
+        mutable ready: task list;
         metas: wait_queue Array_buffer.t;
     }
 
@@ -15,9 +15,12 @@ struct
         mutable value: Value.t option;
     }
 
-    and ready_task = t -> Final.t option
+    and task = t -> Final.t option
 
-    and waiting_task = Value.t -> t -> Final.t option
+    and waiting_task = {
+        started: bool ref;
+        task: (int * Value.t) -> task;
+    }
 
 
     let make (): t =
@@ -48,6 +51,20 @@ struct
         Array_buffer.get s.metas id
 
 
+    let find (id_lst: int list) (s: t): (int * Value.t) option =
+        let rec find = function
+            | [] ->
+                None
+            | id :: lst ->
+                match (queue id s).value with
+                | None ->
+                    find lst
+                | Some value ->
+                    Some (id, value)
+        in
+        find id_lst
+
+
     let meta (id: int) (s: t): Meta.t =
         (queue id s).meta
 
@@ -60,36 +77,53 @@ struct
         let qu = queue id s in
         s.ready <-
             List.fold_right
-                (fun wait_task ready ->
-                     wait_task value :: ready)
+                (fun wait ready ->
+                     let started = !(wait.started) in
+                     wait.started := true;
+                     if started then
+                         ready
+                     else
+                         wait.task (id, value) :: ready
+                )
                 qu.waiting
                 s.ready;
         qu.waiting <- [];
         qu.value <- Some value
 
     
-    let add_wait (id: int) (task: waiting_task) (s: t): unit =
+    let add_wait
+            (id: int)
+            (started: bool ref)
+            (task: (int * Value.t) -> task)
+            (s: t)
+        : unit
+        =
         let qu = queue id s in
         assert (qu.value = None);
-        qu.waiting <- task :: qu.waiting
+        assert (not !started);
+        qu.waiting <- {started; task} :: qu.waiting
 
 
-    let add_ready (task: ready_task) (s: t): unit =
+    let add_ready (task: task) (s: t): unit =
         s.ready <- task :: s.ready
 
 
     let do_ready_task
-            (next: t -> Final.t)                  (* Next ready task returns
-                                                         [None]  *)
-            (lock: int -> (int -> Meta.t) -> Final.t) (* Deadlock, all tasks are
-                                                         waiting *)
+            (next: t -> Final.t)  (* Next ready task returns [None]  *)
+            (lock: int
+                   -> (int -> (Meta.t * Value.t option))
+                   -> Final.t) (* Deadlock, all tasks are waiting *)
             (s: t)
         : Final.t
         =
         match s.ready with
         | [] ->
             (* Deadlock *)
-            lock (count s) (fun id -> meta id s)
+            lock
+                (count s)
+                (fun id ->
+                     let qu = queue id s in
+                     (qu.meta, qu.value))
 
         | task :: ready ->
             s.ready <- ready;
@@ -168,13 +202,30 @@ struct
 
     let wait (id: int): Value.t t =
         fun k s ->
-        let queue = ST.queue id s in
+        let k1 (_, value) = k value
+        and queue = ST.queue id s in
         match queue.value with
         | None ->
-            ST.add_wait id k s;
+            let started = ref false
+            in
+            ST.add_wait id started k1 s;
             None
         | Some value ->
             k value s
+
+
+    let wait_some (id_lst: int list): (int * Value.t) t =
+        fun k s ->
+        match ST.find id_lst s with
+        | None ->
+            let started = ref false
+            in
+            List.iter
+                (fun id -> ST.add_wait id started k s)
+                id_lst;
+            None
+        | Some pair ->
+            k pair s
 
 
     let spawn (task: unit t): unit t =
@@ -190,7 +241,7 @@ struct
 
     let run
             (success: Final.t t)
-            (failure: int -> (int -> Meta.t) -> Final.t)
+            (failure: int -> (int -> (Meta.t * Value.t option)) -> Final.t)
         : Final.t
         =
         let rec iterate (s: state): Final.t =
@@ -261,6 +312,37 @@ let make_leaf (id: int) (s: string): unit t =
     resolve id (Leaf s)
 
 
+let print (flg: bool): Final.t -> Final.t =
+    let open Printf in
+    function
+    | Ok s as res ->
+        if flg then
+            printf "%s %s\n" "Ok" s;
+        res
+    | Error s as res ->
+        if flg then
+            printf "%s %s\n" "Error" s;
+        res
+
+let _ = print
+
+
+let reporter (n: int) (f: int -> (Meta.t * Value.t option)): Final.t =
+    let rec report i =
+        if i = n then
+            Error "no empty values"
+        else
+            let open Printf in
+            let (meta, value) = f i in
+            match value with
+            | None ->
+                Error (sprintf "cannot make %s" meta)
+            | Some _ ->
+                report (i + 1)
+    in
+    report 0
+
+
 let simple : Final.t t =
     Ok (Leaf "simple" |> string_of_tree) |> return
 
@@ -274,13 +356,51 @@ let one_level: Final.t t =
     Ok (Node [a; b] |> string_of_tree) |> return
 
 
+let one_level2 (block_b: bool): Final.t t =
+    let* id_a = create "a" in
+    let* id_b = create "b" in
+    let* _    = spawn (make_leaf id_a "a") in
+    let* _    =
+        if block_b then
+            return ()
+        else
+            spawn (make_leaf id_b "b")
+    in
+    let* (id_x, x) = wait_some [id_a; id_b] in
+    let make t =
+        Ok (t |> string_of_tree) |> return
+    in
+    if id_x = id_a then
+        let* b = wait id_b in
+        make (Node [x; b])
+    else
+        let* a = wait id_a in
+        make (Node [a; x])
+
+
 let%test _ =
-    run simple (fun _ _ -> assert false)
+    run simple reporter
     =
     Ok "simple"
 
 
 let%test _ =
-    run one_level (fun _ _ -> assert false)
+    run one_level reporter
     =
     Ok "(a,b)"
+
+
+let%test _ =
+    print
+        false
+        (run (one_level2 false) reporter)
+    =
+    Ok "(a,b)"
+
+
+let%test _ =
+    print
+        false
+        (run (one_level2 true) reporter)
+    =
+    Error "cannot make b"
