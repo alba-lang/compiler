@@ -8,14 +8,14 @@ module type ANY = Fmlib_std.Interfaces.ANY
 
 module type TRACER =
 sig
-    type time = int
+    type tick = int
     type task = int list
 
-    type item
+    type message
     type t
 
     val empty: t
-    val add: time -> task -> item -> t -> t
+    val add: tick -> task -> message -> t -> t
 end
 
 
@@ -27,28 +27,33 @@ let string_of_path (path: int list): string =
 
 
 
-module State (Meta: ANY) (Value: ANY) (Tracer: TRACER) (Final: ANY) =
+module State (Hole: ANY) (Value: ANY) (Tracer: TRACER) (Final: ANY) =
 struct
+
+    (* See Note [Execution State] *)
     type t = {
-        metas:  wait_queue Array_buffer.t;
+        holes:  wait_queue Array_buffer.t;
         mutable ready: task list;
         mutable active: task_data;
         mutable tick:   int;
         mutable tracer: Tracer.t;
     }
 
-    and wait_queue = {
-        mutable meta: Meta.t;
-        mutable waiting: waiting_task list;
-        mutable value: Value.t option;
-    }
+    and wait_queue =
+        (* See Note [Holes and Values] *)
+        {
+            task_id: int list;   (* Task which created the hole *)
+            mutable hole: Hole.t;
+            mutable waiting: waiting_task list;
+            mutable value: Value.t option;
+        }
 
     and task = {
         action: action;
         data: task_data;
     }
 
-    and waiting_task = {
+    and waiting_task = {        (* See Note [Waiting Tasks] *)
         started: bool ref;
         task: (int * Value.t) -> task;
     }
@@ -66,7 +71,7 @@ struct
     let make (): t =
         {
             ready  = [];
-            metas  = Array_buffer.make ();
+            holes  = Array_buffer.make ();
             active = {n_childs = 0; path = []};
             tick   = 0;
             tracer = Tracer.empty;
@@ -74,17 +79,26 @@ struct
 
     
     let count (s: t): int =
-        Array_buffer.length s.metas
+        Array_buffer.length s.holes
 
 
-    let trace (msg: Tracer.item) (s: t): unit =
+    let tick (s: t): int =
+        s.tick
+
+
+    let path (s: t): int list =
+        s.active.path
+
+
+    let trace (msg: Tracer.message) (s: t): unit =
         s.tracer <-
             Tracer.add s.tick s.active.path msg s.tracer
 
 
-    let create (meta: Meta.t) (s: t): int =
+    let create (hole: Hole.t) (s: t): int =
         let queue = {
-            meta;
+            hole;
+            task_id = s.active.path;
             waiting = [];
             value = None;
         }
@@ -94,14 +108,14 @@ struct
             s.tick
             (string_of_path s.active.path)
             id;*)
-        Array_buffer.push s.metas queue;
+        Array_buffer.push s.holes queue;
         id
 
 
 
     let queue (id: int) (s: t): wait_queue =
         assert (id < count s);
-        Array_buffer.get s.metas id
+        Array_buffer.get s.holes id
 
 
     let find_value (id_lst: int list) (s: t): (int * Value.t) option =
@@ -118,15 +132,15 @@ struct
         find id_lst
 
 
-    let meta (id: int) (s: t): Meta.t =
-        (queue id s).meta
+    let hole (id: int) (s: t): Hole.t =
+        (queue id s).hole
 
 
-    let put (id: int) (meta: Meta.t) (s: t): unit =
-        (queue id s).meta <- meta
+    let put (id: int) (hole: Hole.t) (s: t): unit =
+        (queue id s).hole <- hole
 
 
-    let resolve (id: int) (value: Value.t) (s: t): unit =
+    let fill (id: int) (value: Value.t) (s: t): unit =
         let q = queue id s in
         s.ready <-
             List.fold_right
@@ -216,7 +230,7 @@ struct
 
     let run
             (root: action)
-            (fail: int -> (int -> (Meta.t * Value.t option)) -> Final.t)
+            (fail: int -> (int -> (int list * Hole.t * Value.t option)) -> Final.t)
         : Final.t * Tracer.t
         =
         let state = make ()
@@ -243,7 +257,7 @@ struct
                             (count state)
                             (fun id ->
                                  let q = queue id state in
-                                 (q.meta, q.value))
+                                 (q.task_id, q.hole, q.value))
                     in
                     (final, state.tracer)
         in
@@ -260,32 +274,31 @@ end
 
 
 
-module Make (Meta: ANY) (Value: ANY) (Tracer: TRACER) (Final: ANY) =
+module Make (Hole: ANY) (Value: ANY) (Tracer: TRACER) (Final: ANY) =
 struct
 
-    module ST = State (Meta) (Value) (Tracer) (Final)
-
-    type state = ST.t
+    module ST = State (Hole) (Value) (Tracer) (Final)
 
 
 
-    (* Basic monad *)
+    (* Basic monad (See Note [Elaboration Monad]) *)
 
-    type 'a cont = 'a -> state -> Final.t option
+    type action = ST.t -> Final.t option
 
-    type 'a t = 'a cont -> state -> Final.t option
-
-
-    let final_continuation: Final.t cont =
-        fun final _ -> Some final
+    type 'a t = ('a -> action) -> action
 
 
-    let spawn_continuation: unit cont =
-        fun () _ -> None
+
+    let final_continuation (final: Final.t): action =
+        fun _ -> Some final
+
+
+    let spawn_continuation ((): unit): action =
+        fun _ -> None
 
 
     let return (a: 'a): 'a t =
-        fun k s -> k a s
+        fun k -> k a
 
 
     let (>>=) (m: 'a t) (f: 'a -> 'b t): 'b t =
@@ -301,35 +314,55 @@ struct
         m (fun a -> k (f a))
 
 
+    let (>=>) (f: 'a -> 'b t) (g: 'b -> 'c t): 'a -> 'c t =
+        fun a -> f a >>= g
+
+
 
 
 
     (* Monadic functions *)
 
-    let trace (msg: Tracer.item): unit t =
+    let trace (msg: Tracer.message): unit t =
         fun k s ->
         k (ST.trace msg s) s
 
 
-    let create (meta: Meta.t): int t =
+    let tick: int t =
         fun k s ->
-        k (ST.create meta s) s
+        k (ST.tick s) s
 
 
-    let get (id: int): Meta.t t =
+    let task: int list t =
         fun k s ->
-        k (ST.meta id s) s
+        k (ST.path s) s
 
 
-    let put (id: int) (meta: Meta.t): unit t =
+    let create (hole: Hole.t): int t =
         fun k s ->
-        ST.put id meta s;
+        k (ST.create hole s) s
+
+
+    let get (id: int): Hole.t t =
+        fun k s ->
+        k (ST.hole id s) s
+
+
+    let put (id: int) (hole: Hole.t): unit t =
+        fun k s ->
+        ST.put id hole s;
         k () s
 
 
-    let resolve (id: int) (value: Value.t): unit t =
+    let update (id: int) (f: Hole.t -> Hole.t): unit t =
         fun k s ->
-        ST.resolve id value s;
+        ST.(put id (f (hole id s)) s);
+        k () s
+
+
+    let fill (id: int) (value: Value.t): unit t =
+        fun k s ->
+        ST.fill id value s;
         k () s
 
 
@@ -347,7 +380,7 @@ struct
             k value s
 
 
-    let wait_some (id_lst: int list): (int * Value.t) t =
+    let wait_one (id_lst: int list): (int * Value.t) t =
         fun k s ->
         match ST.find_value id_lst s with
         | None ->
@@ -373,12 +406,15 @@ struct
 
 
     let run
-            (success: Final.t t)
-            (failure: int -> (int -> (Meta.t * Value.t option)) -> Final.t)
+            (main: Final.t t)
+            (failure:
+                 int
+                 -> (int -> (int list * Hole.t * Value.t option))
+                 -> Final.t)
         : (Final.t * Tracer.t)
         =
         ST.run
-            (success final_continuation)
+            (main final_continuation)
             failure
 end
 
@@ -418,7 +454,7 @@ struct
 end
 
 
-module Meta =
+module Hole =
 struct
     type t = string
 end
@@ -431,14 +467,14 @@ end
 
 module Tracer =
 struct
-    type time = int
+    type tick = int
     type task = int list
-    type item = string
-    type t = (time * task * item) list
+    type message = string
+    type t = (tick * task * message) list
 
     let empty: t = []
 
-    let add (n: time) (task: task) (s: string) (tr: t): t =
+    let add (n: tick) (task: task) (s: string) (tr: t): t =
         (n, task, s) :: tr
 
     let print (prefix: string) (tr: t): unit =
@@ -455,7 +491,7 @@ struct
 end
 
 
-include Make (Meta) (Value) (Tracer) (Final)
+include Make (Hole) (Value) (Tracer) (Final)
 
 open Printf
 
@@ -464,15 +500,15 @@ open Printf
 
 
 
-let reporter (n: int) (f: int -> (Meta.t * Value.t option)): Final.t =
+let reporter (n: int) (f: int -> (int list * Hole.t * Value.t option)): Final.t =
     let rec report i =
         if i = n then
             Error "no empty values"
         else
-            let (meta, value) = f i in
+            let (_, hole, value) = f i in
             match value with
             | None ->
-                Error (sprintf "cannot make %s" meta)
+                Error (sprintf "cannot make %s" hole)
             | Some _ ->
                 report (i + 1)
     in
@@ -499,7 +535,7 @@ let test (print_flag: bool) (m: Final.t t) (expect: string): bool =
 
 let make_leaf (id: int) (s: string): unit t =
     let* _ = trace (Printf.sprintf "make (Leaf %s)" s) in
-    resolve id (Leaf s)
+    fill id (Leaf s)
 
 
 let simple : Final.t t =
@@ -532,7 +568,7 @@ let one_level2 (block_b: bool): Final.t t =
             spawn (make_leaf id_b "b")
     in
     let* _ = trace "wait for 'a' or 'b'" in
-    let* (id_x, x) = wait_some [id_a; id_b] in
+    let* (id_x, x) = wait_one [id_a; id_b] in
     let make t =
         let* _ = trace "end make (a,b)" in
         Ok (t |> string_of_tree) |> return
@@ -555,7 +591,7 @@ let one_level_terminate: Final.t t =
         let* a    = wait id_a in
         let* _    = trace "terminate with a" in
         let* _    = Ok (string_of_tree a) |> terminate in
-        resolve id a
+        fill id a
         in
     let* _ = trace "start make (a,b)" in
     let* id_a = create "a" in
@@ -589,3 +625,206 @@ let%test _ =
 
 let%test _ =
     test false one_level_terminate "Ok a"
+
+
+
+
+
+
+
+
+
+
+
+
+(*
+    Note [Execution State]
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    The execution state consists of a ready queue of tasks and an array of
+    holes. Each hole has a queue of waiting tasks (see Note [Waiting Tasks])
+    which are waiting for the hole to be filled.
+
+    The execution units are actions with the type
+
+        t -> Final.t option
+
+    where 't' is the execution state. A task is basically an action with some
+    additional data. The ready queue consists of a list of tasks.
+
+    Each execution of an action increments the time stamp by 1.
+
+    The execution state starts by executing the root action. If action return
+    the final object, then the execution terminates and the final object is
+    returned to the user.
+
+    If the action returns 'None', then the one of the following is done:
+
+    - There is a ready task:
+
+        Pop the task from the ready queue and execute its action.
+
+    - The ready queue is empty:
+
+        Call the error handler with all the holes and its optional values to
+        create the final object.
+*)
+
+
+
+(*
+    Note [Waiting Tasks]
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    A waiting task consists of two components:
+
+        started: bool ref
+
+        task: (int * Value.t) -> task
+
+   A waiting task waits for some hole to be filled. If the hole is filled, the
+   function 'task' can be used to generate a task by applying it to the id of
+   the hole and the filled value. The task can then be pushed to the ready
+   queue.
+
+   The started flag is a reference to a boolean value. Initially the started
+   flag is false. As soon as the waiting task is removed from the wait queue and
+   added to the ready queue the started flag is set to true.
+
+   A waiting task can be in the waiting queue for several holes (i.e. it waits
+   for one of the holes to be filled). The boolean flag is a shared value of all
+   these entries. If the first of these holes is filled and the task is moved to
+   the ready queue, the started flag is set to true. If another of the holes is
+   filled the corresponding entry in the waiting queue has the flag set to true
+   is there not put onto the ready queue. This mechanism avoids that a waiting
+   task is started several times.
+*)
+
+
+(*
+
+    Note [Holes and Values]
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    Objects of type 'Hole.t' are metadata describing the hole to be filled. A
+    hole in the execution state (see Note [Execution State]) is an object with
+    the components
+
+        hole: Hole.t
+
+        waiting: waiting_task list
+
+        value: Value.t option
+
+    The metadata 'hole' can be read and updated. Updating can be considered as
+    partial filling. Finally a hole gets filled with a value. As soon as a hole
+    has been filled, all tasks on the waiting list are put onto the ready queue.
+
+    After filling of a hole, tasks are no longer put onto its waiting queue.
+*)
+
+
+(*
+
+    Note [Tasks]
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    Tasks form a hierarchy.
+
+        - root task []
+
+            - subtask [0]           "subtask 0 of task []"
+
+                - subtask [0,0]     "subtask 0 of task [0]"
+
+            - subtask [1]
+
+                - subtask [0,1]     "subtask 0 of task [1]"
+
+                - subtask [1,1]     "subtask 1 of task [1]"
+
+    Tasks are identified by their paths to the root. The root task has path
+    '[]'. The i-th child of the task identified by 'path' has the path
+
+        i :: path
+*)
+
+
+
+(*
+
+    Note [Elaboration Monad]
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    The basic type declarations of the monad are:
+
+        type action = state -> Final.t option
+
+        type 'a t   = ('a -> action) -> action
+
+    An elaborator which elaborates an object of type 'a has type 'a t. The
+    execution state cannot work with objects of type 'a t'. It needs actions. An
+    action can be generated from an elaborator by giving it a continuation which
+    is a function of type
+
+        'a -> action
+
+    I.e. the combination of an elaborator and a continuation gives an action.
+
+
+    There are two important continuations:
+
+        let final_continuation (final: Final.t): action =
+            fun _ -> Some final
+
+        let spawn_continuation ((): unit): action =
+            fun _ -> None
+
+
+    Having an elaborator 'm: Final.t t' the action
+
+        m final_continuation
+
+    can be given to the execution state to execute it as the main task.
+
+
+    Tasks to be spawned are represented by elaborators 'task: unit t'. An object
+
+        task spawn_continuation
+
+    can be given to the execution state to push it into the ready queue.
+
+
+    Things get interesting if a task has to wait for a hole to be filled. Holes
+    are identified by their number. The call 'wait id' creates an elaborator of
+    type 'Value.t t'. When given a continuation it produces an action. I.e. when
+    given a continuation and a state it has to produce an object of type
+    'Final.t option'. In the case that the hole has not yet been filled the
+    implementation of 'wait' is quite simple.
+
+        let wait (id: int): Value.t =
+            fun k s ->
+            ST.put_active_wait id k;
+            None
+
+    The currently active task is put onto the wait queue of the hole 'id'. Note
+    that the continuation 'k' has the type 'Value.t -> action'. I.e. when the
+    hole gets filled, the continuation 'k' can be used to generate the action of
+    a task which can be shifted onto the ready queue.
+
+    The current action immediately returns 'None' which signals to the execution
+    state to pop other tasks from the ready queue.
+
+    The actual function 'wait' is a little bit more complex.
+
+    It first has to check, if the hole has already been filled. In that case the
+    continuation can be immediately executed by giving it the value and the
+    state.
+
+    Furthermore the core action of a waiting task is called with the id of the
+    hole and the filled value.
+
+    Furthermore a waiting task needs a 'started' flag in order to handle task
+    which can wait for the filling of one of a list of holes (See Note [Waiting
+    Tasks]).
+*)
