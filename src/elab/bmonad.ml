@@ -538,14 +538,36 @@ let one_level2 (block_b: bool): Final.t t =
         Ok (t |> string_of_tree) |> return
     in
     if id_x = id_a then
-        let* _ = trace "wait fof 'b'" in
+        let* _ = trace "wait for 'b'" in
         let* b = wait id_b in
         make (Node [x; b])
     else
-        let* _ = trace "wait fof 'a'" in
+        let* _ = trace "wait for 'a'" in
         let* a = wait id_a in
         make (Node [a; x])
 
+
+let one_level_terminate: Final.t t =
+    let make_a  id =
+        let* id_a = create "a" in
+        let* _    = spawn (make_leaf id_a "a") in
+        let* _    = trace "wait for a" in
+        let* a    = wait id_a in
+        let* _    = trace "terminate with a" in
+        let* _    = Ok (string_of_tree a) |> terminate in
+        resolve id a
+        in
+    let* _ = trace "start make (a,b)" in
+    let* id_a = create "a" in
+    let* id_b = create "b" in
+    let* _    = spawn (make_a id_a) in
+    let* _    = spawn (make_leaf id_b "b") in
+    let* _    = trace "wait for b" in
+    let* b    = wait id_b in
+    let* _    = trace "wait for a" in
+    let* a    = wait id_a in
+    let* _    = trace "end make (a,b)" in
+    Ok (Node [a; b] |> string_of_tree) |> return
 
 
 
@@ -563,3 +585,7 @@ let%test _ =
 
 let%test _ =
     test false (one_level2 true) "Error cannot make b"
+
+
+let%test _ =
+    test false one_level_terminate "Ok a"
