@@ -1,7 +1,22 @@
 module type ANY = Fmlib_std.Interfaces.ANY
 
 
-module Make (Meta: ANY) (Value: ANY) (Final: ANY):
+
+module type TRACER =
+sig
+    type time = int
+    type task = int list
+
+    type item
+    type t
+
+    val empty: t
+    val add: time -> task -> item -> t -> t
+end
+
+
+
+module Make (Meta: ANY) (Value: ANY) (Tracer: TRACER) (Final: ANY):
 sig
     type 'a t
 
@@ -9,6 +24,8 @@ sig
     val (>>=):     'a t -> ('a -> 'b t) -> 'b t
     val ( let* ):  'a t -> ('a -> 'b t) -> 'b t
     val map:       ('a -> 'b) -> 'a t -> 'b t
+
+    val trace:     Tracer.item -> unit t
 
     val create:    Meta.t -> int t
     val get:       int -> Meta.t t
@@ -24,5 +41,5 @@ sig
     val run:
         Final.t t
         -> (int -> (int -> (Meta.t * Value.t option)) -> Final.t)
-        -> Final.t
+        -> (Final.t * Tracer.t)
 end
