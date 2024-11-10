@@ -15,7 +15,7 @@ type term
 type universe_term
 type formal_argument
 
-type t = unit
+type t
 
 
 let range_of_semantic (_: error): Position.range =
@@ -186,4 +186,4 @@ let add_definition
 
 
 let make (): t =
-    ()
+    assert false
