@@ -136,6 +136,10 @@ struct
         (queue id s).hole
 
 
+    let value (id: int) (s: t): Value.t option =
+        (queue id s).value
+
+
     let put (id: int) (hole: Hole.t) (s: t): unit =
         (queue id s).hole <- hole
 
@@ -352,6 +356,11 @@ struct
         fun k s ->
         ST.put id hole s;
         k () s
+
+
+    let value_opt (id: int): Value.t option t =
+        fun k s ->
+        k (ST.value id s) s
 
 
     let update (id: int) (f: Hole.t -> Hole.t): unit t =

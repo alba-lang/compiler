@@ -166,6 +166,10 @@ sig
     (** Get a hole by its id. *)
 
 
+    val value_opt: int -> Value.t option t
+    (** Get the optional value of the hole identified by [id]. *)
+
+
     val put:       int -> Hole.t -> unit t
     (** Update the information of a hole. Note: updating is not filling. Just
      * the metainformation is updated. *)
