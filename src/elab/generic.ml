@@ -380,7 +380,7 @@ struct
             k value s
 
 
-    let wait_one (id_lst: int list): (int * Value.t) t =
+    let wait_one (id: int) (id_lst: int list): (int * Value.t) t =
         fun k s ->
         match ST.find_value id_lst s with
         | None ->
@@ -388,7 +388,7 @@ struct
             in
             List.iter
                 (fun id -> ST.put_active_wait id started k s)
-                id_lst;
+                (id :: id_lst);
             None
         | Some pair ->
             k pair s
@@ -568,7 +568,7 @@ let one_level2 (block_b: bool): Final.t t =
             spawn (make_leaf id_b "b")
     in
     let* _ = trace "wait for 'a' or 'b'" in
-    let* (id_x, x) = wait_one [id_a; id_b] in
+    let* (id_x, x) = wait_one id_a [id_b] in
     let make t =
         let* _ = trace "end make (a,b)" in
         Ok (t |> string_of_tree) |> return

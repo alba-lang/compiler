@@ -184,10 +184,12 @@ sig
         filled. *)
 
 
-    val wait_one:  int list -> (int * Value.t) t
-    (** Wait for the filling of one of the holes in the list of holes. Use the
-        id of the filled hole and its value after one of the holes has been
-        filled.
+    val wait_one:  int -> int list -> (int * Value.t) t
+    (** [wait_one hole list]
+
+        Wait for the filling of one of the holes in the list [hole :: list].
+        Return the id of the filled hole and its value after one of the holes
+        has been filled.
     *)
 
 
