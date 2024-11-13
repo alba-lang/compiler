@@ -7,14 +7,14 @@ module Pretty   = Fmlib_pretty.Print
 
 module Elab = Elaborator
 
-module TP = Definition_parser.Make (Std.Error) (Elab)
+module TP = Alba_parser.Make (Std.Error) (Unit) (Elab)
 
 module PL =
     Fmlib_parse.Parse_with_lexer.Make
         (Elab)
         (Token)
         (Unit)
-        (Definition_parser.Error (Std.Error) (Elab))
+        (Alba_parser.Error (Std.Error) (Elab))
         (Lexer)
         (TP)
 
@@ -28,7 +28,7 @@ let lexer: Lexer.t =
     Lexer.start
 
 let token_parser: TP.t =
-    TP.make elab
+    TP.(make elab (C.definitions false))
 
 let parser_lex: PL.t =
     PL.make lexer token_parser

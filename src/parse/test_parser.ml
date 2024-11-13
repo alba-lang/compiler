@@ -62,14 +62,14 @@ module Elaborator = struct
         ()
 end
 
-module TP = Definition_parser.Make (Void) (Elaborator)
+module TP = Alba_parser.Make (Void) (Unit) (Elaborator)
 
 module PL =
     Parse_with_lexer.Make
         (Unit)
         (Token)
         (Elaborator)
-        (Definition_parser.Error (Void) (Elaborator))
+        (Alba_parser.Error (Void) (Elaborator))
         (Lexer)
         (TP)
 
@@ -79,7 +79,7 @@ module PL =
 
 let lexer: Lexer.t = Lexer.start
 
-let parse: TP.t = TP.make Elaborator.start
+let parse: TP.t = TP.make Elaborator.start (TP.C.definitions false)
 
 let parse_lex: PL.t =
     PL.make lexer parse

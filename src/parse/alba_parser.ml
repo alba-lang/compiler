@@ -176,13 +176,14 @@ end
 (* Combinator part of the Token_parser *)
 module Combinator
         (Semantic: ANY)
+        (Final: ANY)
         (E: ELABORATOR with type error = Semantic.t)
 =
 struct
     module Error = Error (Semantic) (E)
 
     module Basic   =
-        Token_parser.Make (E) (Token) (Unit) (Error)
+        Token_parser.Make (E) (Token) (Final) (Error)
 
     include Basic
 
@@ -780,17 +781,18 @@ end
 (* Parser part of the Token_parser *)
 module Make
         (Semantic: ANY)
+        (Final: ANY)
         (E: ELABORATOR with type error = Semantic.t)
 =
 struct
-    module C = Combinator (Semantic) (E)
+    module C = Combinator (Semantic) (Final) (E)
 
     module Error = Error (Semantic) (E)
 
     include C.Parser
 
-    let make (e: E.t): t =
-        C.(make e (definitions false))
+    let make (e: E.t) (c: Final.t C.t): t =
+        C.(make e c)
 
 
     let range_of_semantic (e: Error.t): Position.range =

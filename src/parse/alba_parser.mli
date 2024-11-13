@@ -113,16 +113,28 @@ end
 
 module Make
         (Semantic: ANY)
+        (Final: ANY)
         (E: ELABORATOR with type error = Semantic.t):
 sig
     include Interfaces.FULL_PARSER
         with type state = E.t
          and type token = Position.range * Token.t
          and type expect = string * Indent.expectation option
-         and type final  = Unit.t
+         and type final  = Final.t
          and type semantic = Error (Semantic) (E).t
 
-    val make: state -> t
+
+    module C:
+    sig
+        include Fmlib_std.Interfaces.MONAD
+
+        val term: unit -> E.term t
+
+        val definitions: bool -> unit t
+    end
+
+
+    val make: state -> Final.t C.t -> t
 
     val range_of_semantic: semantic -> range
 

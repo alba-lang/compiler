@@ -1,4 +1,4 @@
-include Alba_parse.Definition_parser.ELABORATOR
+include Alba_parse.Alba_parser.ELABORATOR
     with type error = Std.Error.t
 
 
