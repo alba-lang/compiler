@@ -278,23 +278,30 @@ end
 
 
 
-module Make (Hole: ANY) (Value: ANY) (Tracer: TRACER) (Final: ANY) =
+module Make (Hole: ANY) (Value: ANY) (Tracer: TRACER) (Final: ANY) (Error: ANY) =
 struct
 
-    module ST = State (Hole) (Value) (Tracer) (Final)
+    type res = (Final.t, Error.t) result
+
+    module ST =
+        State
+            (Hole)
+            (Value)
+            (Tracer)
+            (struct type t = res end)
 
 
 
     (* Basic monad (See Note [Elaboration Monad]) *)
 
-    type action = ST.t -> Final.t option
+    type action = ST.t -> res option
 
     type 'a t = ('a -> action) -> action
 
 
 
     let final_continuation (final: Final.t): action =
-        fun _ -> Some final
+        fun _ -> Some (Ok final)
 
 
     let spawn_continuation ((): unit): action =
@@ -303,6 +310,10 @@ struct
 
     let return (a: 'a): 'a t =
         fun k -> k a
+
+
+    let fail (e: Error.t): 'a t =
+        fun _ _ -> Some (Error e)
 
 
     let (>>=) (m: 'a t) (f: 'a -> 'b t): 'b t =
@@ -409,22 +420,17 @@ struct
         k () s
 
 
-    let terminate (final: Final.t): 'a t =
-        fun _ _ ->
-        Some final
-
-
     let run
             (main: Final.t t)
             (failure:
                  int
                  -> (int -> (int list * Hole.t * Value.t option))
-                 -> Final.t)
-        : (Final.t * Tracer.t)
+                 -> Error.t)
+        : (res * Tracer.t)
         =
         ST.run
             (main final_continuation)
-            failure
+            (fun n f -> Error (failure n f))
 end
 
 
@@ -459,7 +465,7 @@ let rec string_of_tree: string tree -> string =
 
 module Final =
 struct
-    type t = (string, string) result
+    type t = string
 end
 
 
@@ -500,7 +506,7 @@ struct
 end
 
 
-include Make (Hole) (Value) (Tracer) (Final)
+include Make (Hole) (Value) (Tracer) (Final) (Final)
 
 open Printf
 
@@ -509,15 +515,18 @@ open Printf
 
 
 
-let reporter (n: int) (f: int -> (int list * Hole.t * Value.t option)): Final.t =
+let reporter
+        (n: int) (f: int -> (int list * Hole.t * Value.t option))
+    : string
+    =
     let rec report i =
         if i = n then
-            Error "no empty values"
+            "no empty values"
         else
             let (_, hole, value) = f i in
             match value with
             | None ->
-                Error (sprintf "cannot make %s" hole)
+                sprintf "cannot make %s" hole
             | Some _ ->
                 report (i + 1)
     in
@@ -548,7 +557,7 @@ let make_leaf (id: int) (s: string): unit t =
 
 
 let simple : Final.t t =
-    Ok (Leaf "simple" |> string_of_tree) |> return
+    (Leaf "simple" |> string_of_tree) |> return
 
 
 let one_level: Final.t t =
@@ -562,7 +571,7 @@ let one_level: Final.t t =
     let* _    = trace "wait for b" in
     let* b    = wait id_b in
     let* _    = trace "end make (a,b)" in
-    Ok (Node [a; b] |> string_of_tree) |> return
+    Node [a; b] |> string_of_tree |> return
 
 
 let one_level2 (block_b: bool): Final.t t =
@@ -580,7 +589,7 @@ let one_level2 (block_b: bool): Final.t t =
     let* (id_x, x) = wait_one id_a [id_b] in
     let make t =
         let* _ = trace "end make (a,b)" in
-        Ok (t |> string_of_tree) |> return
+        t |> string_of_tree |> return
     in
     if id_x = id_a then
         let* _ = trace "wait for 'b'" in
@@ -599,7 +608,7 @@ let one_level_terminate: Final.t t =
         let* _    = trace "wait for a" in
         let* a    = wait id_a in
         let* _    = trace "terminate with a" in
-        let* _    = Ok (string_of_tree a) |> terminate in
+        let* _    = string_of_tree a |> fail in
         fill id a
         in
     let* _ = trace "start make (a,b)" in
@@ -612,7 +621,7 @@ let one_level_terminate: Final.t t =
     let* _    = trace "wait for a" in
     let* a    = wait id_a in
     let* _    = trace "end make (a,b)" in
-    Ok (Node [a; b] |> string_of_tree) |> return
+    Node [a; b] |> string_of_tree |> return
 
 
 
@@ -633,7 +642,7 @@ let%test _ =
 
 
 let%test _ =
-    test false one_level_terminate "Ok a"
+    test false one_level_terminate "Error a"
 
 
 
@@ -656,16 +665,16 @@ let%test _ =
 
     The execution units are actions with the type
 
-        t -> Final.t option
+        t -> res option
 
     where 't' is the execution state. A task is basically an action with some
     additional data. The ready queue consists of a list of tasks.
 
     Each execution of an action increments the time stamp by 1.
 
-    The execution state starts by executing the root action. If action return
-    the final object, then the execution terminates and the final object is
-    returned to the user.
+    The execution state starts by executing the root action. If action returns a
+    result, then the execution terminates and the result is returned to the
+    user.
 
     If the action returns 'None', then the one of the following is done:
 
@@ -767,7 +776,7 @@ let%test _ =
 
     The basic type declarations of the monad are:
 
-        type action = state -> Final.t option
+        type action = state -> res option
 
         type 'a t   = ('a -> action) -> action
 
@@ -784,7 +793,7 @@ let%test _ =
     There are two important continuations:
 
         let final_continuation (final: Final.t): action =
-            fun _ -> Some final
+            fun _ -> Some (Ok final)
 
         let spawn_continuation ((): unit): action =
             fun _ -> None

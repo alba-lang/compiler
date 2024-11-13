@@ -29,7 +29,7 @@ end
 (** {1 Generic elaborator with interleaved tasks} *)
 
 (** Generic elaborator with interleaved tasks *)
-module Make (Hole: ANY) (Value: ANY) (Tracer: TRACER) (Final: ANY):
+module Make (Hole: ANY) (Value: ANY) (Tracer: TRACER) (Final: ANY) (Error: ANY):
 sig
 
     (**{1 Basics} *)
@@ -90,6 +90,10 @@ sig
     (** Immediately elaborate an object of type ['a]. *)
 
 
+    val fail: Error.t -> 'a t
+    (** Immediately fail with an error. *)
+
+
     val (>>=):     'a t -> ('a -> 'b t) -> 'b t
     (** [m >>= f]
 
@@ -126,16 +130,16 @@ sig
 
     val run:
         Final.t t
-        -> (int -> (int -> (int list * Hole.t * Value.t option)) -> Final.t)
-        -> (Final.t * Tracer.t)
+        -> (int -> (int -> (int list * Hole.t * Value.t option)) -> Error.t)
+        -> ((Final.t, Error.t) result * Tracer.t)
     (** [run m error_handler]
 
         Run the elaborator [m] and all its created subtasks until
         - either the root task elaborates an object of type [Final.t]
         - or the elaboration process deadlocks (all tasks are waiting for the
-        filling of some holes) and the final object is created by calling
+        filling of some holes) and the error object is created by calling
         [error_handler] with the content of all holes
-        - or some task calls {!val:terminate}.
+        - or some task calls {!val:fail}.
 
         Finally return the elaborated object and the tracer which collected the
         tracing messages.
@@ -209,17 +213,6 @@ sig
     *)
 
 
-
-
-
-    (** {1 Early Termination} *)
-
-    val terminate: Final.t -> 'a t
-    (** Immediately terminate the execution and return the final object.
-
-        This function might be needed if the elaboration encounters an error. In
-        that case the final object is filled with error information.
-    *)
 
 
 
