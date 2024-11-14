@@ -26,7 +26,7 @@ sig
 
     type meta_reason
 
-    val new_meta: meta_reason -> req -> int -> int t
+    val new_meta: meta_reason -> req -> int t
 
     val spawn: unit t -> unit t
 end

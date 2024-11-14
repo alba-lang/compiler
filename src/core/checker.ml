@@ -19,7 +19,6 @@ module Req =
 struct
     type t = {
         rid:        int;
-        rgid:       int;
         rglen:      int;
         rtyp:       Term.t;                 (* result type *)
         arg_typs:   (bool * Term.t) array;  (* argument types *)
@@ -66,7 +65,6 @@ struct
     let of_type (rid: int) (rtyp: Term.t) (g: gamma): t =
         {
             rid;
-            rgid  = Gamma.index g;
             rglen = Gamma.length g;
             rtyp;
             arg_typs  = [||];
@@ -85,7 +83,6 @@ type req = Req.t
 
 type term = {
     (* A term is valid in a certain context. *)
-    tgid:  int;         (* id of gamma *)
     tglen: int;         (* length of gamma *)
     term:  Term.t;
     typ:   Term.t;
@@ -109,7 +106,7 @@ sig
 
     type meta_reason
 
-    val new_meta: meta_reason -> req -> int -> int t
+    val new_meta: meta_reason -> req  -> int t
 
     val spawn: unit t -> unit t
 end
@@ -136,8 +133,6 @@ let global_entry (m: int) (i: int) (g: gamma): Globals.Entry.t =
 
 
 let is_valid_req (req: req) (g: gamma): bool =
-    req.rgid  = Gamma.index g
-    &&
     req.rglen = Gamma.length g
 
 
@@ -146,8 +141,6 @@ let is_valid_req (req: req) (g: gamma): bool =
 
 
 let is_valid_term (t: term) (g: gamma): bool =
-    t.tgid = Gamma.index g
-    &&
     t.tglen = Gamma.length g
 
 
@@ -192,7 +185,6 @@ let is_type (t: term) (_: gamma): bool =
 
 let term_in (term: Term.t) (typ: Term.t) (g: gamma): term =
     {
-        tgid  = Gamma.index g;
         tglen = Gamma.length g;
         term;
         typ;
@@ -202,7 +194,6 @@ let term_in (term: Term.t) (typ: Term.t) (g: gamma): term =
 
 let term_req_in (term: Term.t) (typ: Term.t) (req: Req.t) (g: gamma): term =
     {
-        tgid  = Gamma.index g;
         tglen = Gamma.length g;
         term;
         typ;
@@ -504,8 +495,7 @@ struct
             (g: gamma)
         : gamma t
         =
-        let* id = new_context in
-        return (Gamma.push_variable bnd with_map tp id g)
+        return (Gamma.push_variable bnd with_map tp g)
 
 
 
@@ -684,8 +674,7 @@ struct
 
     let empty_gamma (globals: globals): gamma M.t =
         M.(
-            let* id = new_context in
-            return (Gamma.empty id globals)
+            return (Gamma.empty globals)
         )
 
 
@@ -723,7 +712,7 @@ struct
 
     let make_meta (r: meta_reason) (req: req) (g: gamma): term t =
         let* midx =
-            M.new_meta r req (Gamma.index g)
+            M.new_meta r req
         in
         let  name =
             String.concat ""
@@ -865,7 +854,7 @@ struct
         assert (is_valid_term tp g);
         assert (is_prefix g0 g);
         assert (is_type tp g);
-        if Gamma.equal g0 g then
+        if g0 == g then
             return tp
         else
             let len  = Gamma.length g

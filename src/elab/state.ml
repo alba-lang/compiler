@@ -59,12 +59,11 @@ let new_context (s: t): int =
 
 
 let new_meta
-        (report: (t -> unit) option) (req: Checker.req) (ctxt: int) (s: t)
+        (report: (t -> unit) option) (req: Checker.req) (s: t)
     : int
     =
     let open Array_buffer in
-    assert (ctxt < length s.contexts);
-    let c = get s.contexts ctxt in
+    let c = get s.contexts 0 in (* !!!!! *)
     let id = length c.metas in
     push c.metas {req; report;};
     id

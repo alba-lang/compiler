@@ -18,22 +18,16 @@ sig
     val gamma: t -> gamma
 end
 
-val index:  t -> int
-
-
 val length: t -> int
 
 
 val de_bruijn: int -> t -> int
 
 
-val empty: int -> Globals.t -> t
+val empty: Globals.t -> t
 
 
 val entry: int -> t -> Entry.t
-
-
-val equal: t -> t -> bool
 
 
 val is_prefix: t -> t -> bool
@@ -50,7 +44,7 @@ val find_local: Name.t -> t -> int option
 val find_global: Name.t -> t -> (int * int) list
 
 
-val push_variable: Info.Bind.t -> bool -> Term.pair -> int ->  t -> t
+val push_variable: Info.Bind.t -> bool -> Term.pair  ->  t -> t
 
 
 val globals: t -> Globals.t

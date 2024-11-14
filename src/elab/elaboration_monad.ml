@@ -58,12 +58,14 @@ struct
 
 
 
-    let new_meta (r: meta_reason) (req: Checker.req) (ctxt: int): int t =
+    let new_meta (r: meta_reason) (req: Checker.req): int t =
         fun s k ->
         let id =
             State.new_meta
                 (Option.map (fun e _ -> raise (Fail e)) r)
-                req ctxt s in
+                req
+                s
+        in
         k id s
 
 

@@ -9,7 +9,6 @@ open Std
 
 
 type t = {
-    id: int;
     globals: Globals.t;
     content: entry Rb_array.t;
     map: int Name_map.t;
@@ -49,10 +48,6 @@ end
 
 
 
-let index (g: t ): int =
-    g.id
-
-
 
 
 let length (g: t): int =
@@ -66,18 +61,13 @@ let de_bruijn (i: int) (g: t): int =
 
 
 
-let equal (g1: t) (g2: t): bool =
-    g1.id = g2.id
-
-
 let globals (g: t): Globals.t =
     g.globals
 
 
 
-let empty (id: int) (globals: Globals.t) : t =
+let empty (globals: Globals.t) : t =
     {
-        id;
         globals;
         content  = Rb_array.empty;
         map      = Name_map.empty;
@@ -98,10 +88,10 @@ let is_prefix (g0: t) (g: t): bool =
     if n0 > n then
         false
     else if n0 = n then
-        equal g0 g
+        g0 == g
     else
         let e = entry n0 g in
-        equal g0 e.previous
+        g0  == e.previous
 
 
 
@@ -130,12 +120,10 @@ let push_variable
         (bnd: Info.Bind.t)
         (with_map: bool)
         (tp: Term.pair)
-        (id: int)
         (g: t)
     : t
     =
     { g with
-      id;
       content  =
           Rb_array.push (Entry.make g bnd tp None) g.content;
       map =
