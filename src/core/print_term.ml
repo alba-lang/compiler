@@ -23,22 +23,27 @@ let parenthesized (d: doc): doc =
 
 
 let rec doc_with_precedence (t: t): doc * Precedence.t =
+    let open Sort in
     match t with
-    | Top ->
-        text "Any max",
+    | Sort (Top _ ) ->
+        text "Top",
         Precedence.application
 
-    | Prop ->
+    | Sort Prop ->
         text "Prop",
         Precedence.highest
 
-    | Any i ->
+    | Sort (Any i) ->
         if i = 0 then
             text "Any"
           , Precedence.highest
         else
             text ("Any " ^ string_of_int i)
           , Precedence.application
+
+    | Sort Level ->
+        assert false
+
 
     | Local (n, _)  | Global (n, _, _) | Meta (n, _, _) ->
         name_with_precedence n

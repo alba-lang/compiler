@@ -53,7 +53,7 @@ struct
         (* Is the requirement for a type term? *)
         is_normal req
         &&
-        req.rtyp = Term.Top
+        req.rtyp = Term.top0
 
 
     let argument_type (req: t): Term.t =
@@ -71,7 +71,7 @@ struct
         }
 
     let type_requirement (rid: int) (g: gamma): t =
-        of_type rid Term.Top g
+        of_type rid Term.top0 g
 end
 
 
@@ -349,8 +349,10 @@ struct
             (_: gamma)
         : Term.t t
         =
+        let open Sort
+        in
         match t with
-        | Prop | Any _ | Top | Pi _ | Lam _ | Type _
+        | Sort Prop | Sort (Any _) | Sort (Top _) | Pi _ | Lam _ | Type _
         | Local _ | Global _ ->
             return t
 
@@ -432,26 +434,28 @@ struct
             let* t1 = head_normal t1 g in
             let* t2 = head_normal t2 g in
 
+            let open Sort
+            in
             match t1, t2 with
 
-            | Prop,   Prop
-            | Top,    Top ->
+            | Sort Prop,       Sort Prop
+            | Sort (Top _),    Sort (Top _) ->
 
                 return true
 
-            | Prop,   Any _
-            | Prop,   Top
-            | Any _,  Top ->
+            | Sort Prop,     Sort (Any _)
+            | Sort Prop,     Sort (Top _)
+            | Sort (Any _),  Sort (Top _) ->
 
                 return subtype
 
-            | Top,   Any _
-            | Top,   Prop
-            | Any _, Prop ->
+            | Sort (Top _),   Sort (Any _)
+            | Sort (Top _),   Sort Prop
+            | Sort (Any _),   Sort Prop ->
 
                 return false
 
-            | Any i, Any j ->
+            | Sort (Any i),   Sort (Any j) ->
 
                 return (i = j || (subtype && i < j))
 
@@ -503,11 +507,13 @@ struct
     let rec signature (tp: Term.t) (g: gamma): Sign.t t =
         (* [tp] must be a type! *)
         let* tp = head_normal tp g in
+        let open Sort
+        in
         match tp with
-        | Top ->
+        | Sort (Top _) ->
             assert false (* Illegal call *)
 
-        | Prop | Any _ ->
+        | Sort Prop |  Sort (Any _) ->
             return Sign.Sort
 
         | Local _ ->
@@ -548,7 +554,7 @@ struct
         let rec strip t =
             let open Term in
             match t with
-            | Prop | Any _ | Top | Global _ | Local _ ->
+            | Sort Prop | Sort (Any _) | Sort (Top _) | Global _ | Local _ ->
                 return t
 
             | Meta (_, i, _) as m ->
@@ -774,7 +780,7 @@ struct
 
 
     let any (gamma: gamma): term M.t =
-        return (term_in (Term.Any 0) (Term.Any 1) gamma)
+        return (term_in Term.any0 Term.any1 gamma)
 
 
 

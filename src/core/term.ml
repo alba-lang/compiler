@@ -14,9 +14,7 @@ Type definition
 
 type t =
     (* sorts *)
-    | Prop
-    | Any of int            (* 0 or 1 *)
-    | Top
+    | Sort of Sort.t
 
     (* variables *)
     | Local  of Name.t * int        (* De Bruijn index *)
@@ -120,8 +118,9 @@ and pointer = unit (* nyi *)
 
 let map_de_bruijn (f: int -> int) (t: t): t =
     let rec go nb t =
+        let open Sort in
         match t with
-        | Top | Prop | Any _ | Global _ | Meta _ ->
+        | Sort (Top _) | Sort Prop | Sort (Any _) | Global _ | Meta _ ->
             t
 
         | Local (name, i) as t ->
@@ -189,16 +188,18 @@ let pair_up (n: int) ((t, tp): pair): pair =
 
 
 
-let prop: t = Prop
-let any0: t = Any 0
-let any1: t = Any 1
+let prop: t = Sort Prop
+let any0: t = Sort (Any 0)
+let any1: t = Sort (Any 1)
+let top0: t = Sort (Top 0)
+let top1: t = Sort (Top 1)
 
 
 
 let pi_sort (sa: t) (sb: t): t =
     match sa, sb with
-    | _,     Prop  -> Prop
-    | Any i, Any j -> Any (max i j)
+    | _,     Sort Prop -> Sort Prop
+    | Sort (Any i), Sort (Any j) -> Sort (Any (max i j))
     | _            -> assert false (* Illegal call *)
 
 
