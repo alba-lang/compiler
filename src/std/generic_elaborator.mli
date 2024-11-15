@@ -16,8 +16,6 @@ sig
 
     type t       (** Type of the tracer *)
 
-    val empty: t (** An empty tracer with no messages *)
-
     val add: tick -> task -> message -> t -> t
     (** [add tick task message tracer]
         Add [message] at [tick] from [task] to [tracer]. *)
@@ -129,10 +127,11 @@ sig
     (** {1 Run the Elaborator} *)
 
     val run:
-        Final.t t
-        -> (int -> (int -> (int list * Hole.t * Value.t option)) -> Error.t)
+        (int -> (int -> (int list * Hole.t * Value.t option)) -> Error.t)
+        -> Final.t t
+        -> Tracer.t
         -> ((Final.t, Error.t) result * Tracer.t)
-    (** [run m error_handler]
+    (** [run error_handler m tracer]
 
         Run the elaborator [m] and all its created subtasks until
         - either the root task elaborates an object of type [Final.t]

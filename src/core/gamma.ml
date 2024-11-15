@@ -6,7 +6,7 @@ open Std
 
 
 
-
+type term
 
 type t = {
     globals: Globals.t;

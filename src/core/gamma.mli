@@ -1,5 +1,6 @@
 open Std
 
+type term
 
 type t
 

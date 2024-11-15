@@ -11,7 +11,6 @@ sig
     type message
     type t
 
-    val empty: t
     val add: tick -> task -> message -> t -> t
 end
 
@@ -65,13 +64,13 @@ struct
 
 
 
-    let make (): t =
+    let make (tracer: Tracer.t): t =
         {
             ready  = [];
             holes  = Array_buffer.make ();
             active = {n_childs = 0; path = []};
             tick   = 0;
-            tracer = Tracer.empty;
+            tracer;
         }
 
     
@@ -230,11 +229,12 @@ struct
 
 
     let run
-            (root: action)
             (fail: int -> (int -> (int list * Hole.t * Value.t option)) -> Final.t)
+            (root: action)
+            (tracer: Tracer.t)
         : Final.t * Tracer.t
         =
-        let state = make ()
+        let state = make tracer
         and task  = {
             action = root;
             data = {
@@ -418,16 +418,18 @@ struct
 
 
     let run
-            (main: Final.t t)
             (failure:
                  int
                  -> (int -> (int list * Hole.t * Value.t option))
                  -> Error.t)
+            (main: Final.t t)
+            (tracer: Tracer.t)
         : (res * Tracer.t)
         =
         ST.run
-            (main final_continuation)
             (fun n f -> Error (failure n f))
+            (main final_continuation)
+            tracer
 end
 
 
@@ -536,7 +538,7 @@ let test (print_flag: bool) (m: Final.t t) (expect: string): bool =
         | Ok s    -> sprintf "Ok %s" s
         | Error s -> sprintf "Error %s" s
     in
-    let (res, tracer) = run m reporter in
+    let (res, tracer) = run reporter m Tracer.empty in
     let sres = string_of_res res in
     if print_flag then
         begin
