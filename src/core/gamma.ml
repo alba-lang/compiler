@@ -6,8 +6,6 @@ open Std
 
 
 
-type term
-
 type t = {
     globals: Globals.t;
     content: entry Rb_array.t;
@@ -20,6 +18,30 @@ and entry = {
     typ:  Term.pair;        (* Type and the sort of the type. *)
     def:  Term.t option;
 }
+
+and term =
+    | Free of  t * Sort.t
+    | Typed of t * Term.t * term (* Gamma |- t : T *)
+
+
+
+
+let gamma_of_term: term -> t = function
+    | Free (g, _)     -> g
+    | Typed (g, _, _) -> g
+
+
+let term_of_term: term -> Term.t = function
+    | Free (_, s)    -> Term.Sort s
+    | Typed(_, t, _) -> t
+
+
+let type_of_term: term -> term = function
+    | Free (g, s) ->
+        Free (g, Sort.type_of s)
+    | Typed(_, _, tp) ->
+        tp
+
 
 
 module Entry =
@@ -74,11 +96,17 @@ let empty (globals: Globals.t) : t =
     }
 
 
-
 let entry (i: int) (g: t): Entry.t =
     assert (i < length g);
     Rb_array.element i g.content
 
+
+
+let gamma0 (g: t): t =
+    if length g = 0 then
+        g
+    else
+        (entry 0 g).previous
 
 
 let is_prefix (g0: t) (g: t): bool =
@@ -132,3 +160,21 @@ let push_variable
           else
               g.map;
     }
+
+
+
+
+let any (level: int) (g: t): term =
+    Free (gamma0 g, Sort.Any level)
+
+
+let top (level: int) (g: t): term =
+    Free (gamma0 g, Sort.Top level)
+
+
+let prop (g: t): term =
+    Free (gamma0 g, Sort.Prop)
+
+
+let meta (id: int) (tp: term) (g: t): term =
+    Typed (g, Meta id, tp)

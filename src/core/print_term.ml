@@ -1,6 +1,7 @@
 open Fmlib_pretty
 open Term
 open Std
+open Printf
 
 
 type doc = Print.doc
@@ -22,31 +23,39 @@ let parenthesized (d: doc): doc =
     group (text "(" <+> cut <+> indent d <+> cut <+> text ")")
 
 
+let sort_with_int (s: string) (i: int): doc * Precedence.t =
+    if i = 0 then
+        text s,
+        Precedence.highest
+    else
+        text (sprintf "%s %d" s i),
+        Precedence.application
+
+
 let rec doc_with_precedence (t: t): doc * Precedence.t =
     let open Sort in
     match t with
-    | Sort (Top _ ) ->
-        text "Top",
-        Precedence.application
+    | Sort (Top i) ->
+        sort_with_int "Top" i
 
     | Sort Prop ->
         text "Prop",
         Precedence.highest
 
     | Sort (Any i) ->
-        if i = 0 then
-            text "Any"
-          , Precedence.highest
-        else
-            text ("Any " ^ string_of_int i)
-          , Precedence.application
+        sort_with_int "Any" i
 
     | Sort Level ->
-        assert false
+        text "Univ",
+        Precedence.highest
 
 
-    | Local (n, _)  | Global (n, _, _) | Meta (n, _, _) ->
+    | Local (n, _)  | Global (n, _, _) ->
         name_with_precedence n
+
+    | Meta id ->
+        sprintf "?%d" id |> text,
+        Precedence.highest
 
     | Pi (args, res) ->
         pi 0 args res

@@ -1,8 +1,21 @@
 open Std
 
-type term
-
 type t
+
+type term =
+    | Free  of t * Sort.t        (* Gamma |- s *)
+    | Typed of t * Term.t * term (* Gamma |- t : T *)
+
+
+
+val gamma_of_term: term -> t
+
+val term_of_term:  term -> Term.t
+
+val type_of_term:  term -> term
+
+
+
 
 module Entry:
 sig
@@ -31,6 +44,9 @@ val empty: Globals.t -> t
 val entry: int -> t -> Entry.t
 
 
+val gamma0: t -> t
+
+
 val is_prefix: t -> t -> bool
 
 
@@ -49,3 +65,10 @@ val push_variable: Info.Bind.t -> bool -> Term.pair  ->  t -> t
 
 
 val globals: t -> Globals.t
+
+
+val any:  int -> t -> term
+val top:  int -> t -> term
+val prop: t -> term
+
+val meta: int -> term -> t -> term (* id, type, gamma *)

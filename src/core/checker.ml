@@ -464,15 +464,15 @@ struct
 
                 return false
 
-            | Meta (_, _, _), Meta (_, _, _) ->
+            | Meta _, Meta _ ->
 
                 assert false (* nyi *)
 
-            | Meta (_, len, id), t2 ->
+            | Meta _, _ ->
 
-                meta len id t2 g
+                assert false
 
-            | _, Meta (_, _, _) ->
+            | _, Meta _ ->
                 assert false (* nyi *)
 
             | Pi (_, _), Pi (_, _) ->
@@ -480,10 +480,6 @@ struct
 
             | _, _ ->
                 assert false (* nyi *)
-
-
-        and meta (_: int) (_: int) (_: Term.t) (_: gamma): bool t =
-            assert false
     end
 
 
@@ -522,8 +518,8 @@ struct
         | Global (name, m, i) ->
             return (Sign.Global (name, m, i))
 
-        | Meta (name, len, i) ->
-            return (Sign.Meta (name, len, i))
+        | Meta _ ->
+            assert false
 
         | Pi (args, (r, _)) ->
             let* lst, g =
@@ -557,12 +553,8 @@ struct
             | Sort Prop | Sort (Any _) | Sort (Top _) | Global _ | Local _ ->
                 return t
 
-            | Meta (_, i, _) as m ->
-                assert (i <= Gamma.length g);
-                if i < n then
-                    return m
-                else
-                    assert false (* nyi *)
+            | Meta _ ->
+                assert false
 
             | Pi (args, r) ->
                 let* args =
@@ -729,9 +721,10 @@ struct
                 ]
             |> Name.normal
         in
+        let _ = name in
         return (
             term_in
-                (Term.(Meta (name, Gamma.length g, midx)))
+                (assert false)
                 req.rtyp
                 g
             |> term_with_req req
@@ -746,7 +739,7 @@ struct
 
     let check (range: range) (term: term) (req: req) (g: gamma): term t =
         (* check if the term satisfies the requirement in the context *)
-        Printf.printf "Check term: %s\n" (Print_term.string term.term);
+        (*Printf.printf "Check term: %s\n" (Print_term.string term.term);*)
         assert (is_valid_term term g);
         assert (is_valid_req  req  g);
 
