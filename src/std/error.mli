@@ -3,7 +3,7 @@ open Fmlib_pretty
 
 type t
 
-val make: Position.range -> string -> (unit -> Print.doc) -> t
+val make: Position.range -> string -> Print.doc -> t
 
 val range: t -> Position.range
 

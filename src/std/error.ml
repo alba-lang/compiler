@@ -5,11 +5,11 @@ open Fmlib_pretty
 type t = {
     range: Position.range;
     tag:   string;
-    doc:   unit -> Print.doc;
+    doc:   Print.doc;
 }
 
 
-let make (range: Position.range) (tag: string) (doc: unit -> Print.doc): t =
+let make (range: Position.range) (tag: string) (doc: Print.doc): t =
     { range; tag; doc }
 
 
@@ -38,17 +38,15 @@ let tag (e: t): string =
 
 
 let doc (e: t): Print.doc =
-    e.doc ()
+    e.doc
 
 
 let cannot_infer_type (range: Position.range): t =
     make
         range
         "cannot infer type"
-        (fun () ->
-             Print.(wrap_words
-                         {| I cannot infer a type of this expression.
+        Print.(wrap_words
+                   {| I cannot infer a type of this expression.
                            Can you help me with some type annotations? |}
-                     <+> cut <+> cut
-                    )
-        )
+               <+> cut <+> cut
+              )

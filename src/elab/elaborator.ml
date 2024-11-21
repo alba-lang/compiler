@@ -70,9 +70,9 @@ let nyi (range: range) (s: string): 'a M.t =
         Error.make
             range
             "not yet implemented"
-            (fun () ->
-                 Pretty.(text "<" <+> text s <+> text "> " <+>
-                         text "is not yet implemented." <+> cut <+> cut))
+            (
+                Pretty.(text "<" <+> text s <+> text "> " <+>
+                        text "is not yet implemented." <+> cut <+> cut))
     )
 
 
@@ -461,7 +461,7 @@ let add_definition
                         Error.make
                             range
                             "ambiguous definition"
-                            (fun () -> Pretty.empty)
+                            Pretty.empty
                     )
             end
 
