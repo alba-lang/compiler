@@ -157,15 +157,15 @@ sig
 
     (**{1 Holes} *)
 
-    val create:    Hole.t -> int t
-    (** [create hole]
+    val create_hole:    Hole.t -> int t
+    (** [create_hole h]
 
-        Create a hole with the object [hole] and return an id for the hole.
+        Create a hole with the object [h] and return an id for the hole.
         Initially a hole is unfilled.
     *)
 
 
-    val get:       int -> Hole.t t
+    val get_hole:       int -> Hole.t t
     (** Get a hole by its id. *)
 
 
@@ -173,28 +173,28 @@ sig
     (** Get the optional value of the hole identified by [id]. *)
 
 
-    val put:       int -> Hole.t -> unit t
+    val put_hole:       int -> Hole.t -> unit t
     (** Update the information of a hole. Note: updating is not filling. Just
      * the metainformation is updated. *)
 
 
-    val update:    int -> (Hole.t -> Hole.t) -> unit t
+    val update_hole:    int -> (Hole.t -> Hole.t) -> unit t
     (** Update the information of a hole. *)
 
 
-    val fill:      int -> Value.t -> unit t
+    val fill_hole:      int -> Value.t -> unit t
     (** Fill a hole with a value and unblock all tasks waiting for the value. *)
 
 
-    val wait:      int -> Value.t t
+    val wait_hole:      int -> Value.t t
     (** Wait for the filling of a hole. Use the value after the hole has been
         filled. *)
 
 
-    val wait_one:  int -> int list -> (int * Value.t) t
-    (** [wait_one hole list]
+    val wait_one_of_holes:  int -> int list -> (int * Value.t) t
+    (** [wait_one hole_id list]
 
-        Wait for the filling of one of the holes in the list [hole :: list].
+        Wait for the filling of one of the holes in the list [hole_id :: list].
         Return the id of the filled hole and its value after one of the holes
         has been filled.
     *)

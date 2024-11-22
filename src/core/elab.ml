@@ -170,7 +170,7 @@ end
 
 let create_hole (h: Hole.t): int t =
     let open Pretty in
-    let* id = create h in
+    let* id = create_hole h in
     let* _  = trace
         (fun () ->
             text (sprintf "?%d" id)
@@ -191,7 +191,7 @@ let create_term_hole (uni: bool) (ty: term) (g: gamma): int t =
 
 
 let meta (id: int): term t =
-    let* h = get id in
+    let* h = get_hole id in
     Gamma.meta id h.res_tp h.gamma |> return
 
 
@@ -265,7 +265,7 @@ let rec unify (eq: bool) (act: term) (req: term): bool t =
 
 and flex_rigid (eq: bool) (sub: bool) (id: int) (t: term): bool t =
     (* See Note [Flex Rigid Simple] *)
-    let* h   = get id in
+    let* h   = get_hole id in
     let  gm  = Hole.gamma h
     and  gt  = gamma_of_term t
     in
@@ -274,12 +274,12 @@ and flex_rigid (eq: bool) (sub: bool) (id: int) (t: term): bool t =
             unify false (type_of_term t) (type_of_term (Hole.type_of h))
         in
         if ok then
-            let* _ = fill id t in
+            let* _ = fill_hole id t in
             return ok
         else
             assert false
     else
-        let* v = wait id in
+        let* v = wait_hole id in
         if eq then
             unify eq v t
         else if sub then
@@ -289,13 +289,13 @@ and flex_rigid (eq: bool) (sub: bool) (id: int) (t: term): bool t =
 
 
 
-let fill_hole (id: int) (_: range) (t: term): unit t =
+let fill_ehole (id: int) (_: range) (t: term): unit t =
 
     let  tp_act = Gamma.type_of_term t in
-    let* h      = get id in
+    let* h      = get_hole id in
     let  tp_req = h.res_tp in
     let* _      = unify false tp_act tp_req in
-    fill id t
+    fill_hole id t
 
 
 
@@ -308,7 +308,7 @@ let zonc_raw: Term.t -> Term.t t = function
 
     | Meta id ->
 
-        map term_of_term (wait id)
+        map term_of_term (wait_hole id)
 
     | _ ->
 
@@ -376,13 +376,13 @@ let run_ge (m: Final.t GE.t) (state: State.t)
 
 let prop (range: range): Ast.term =
     fun g id ->
-    fill_hole id range (Gamma.prop g)
+    fill_ehole id range (Gamma.prop g)
 
 
 
 let any (range: range) (level: int): Ast.term =
     fun g id ->
-    fill_hole id range (Gamma.any level g)
+    fill_ehole id range (Gamma.any level g)
 
 
 
@@ -401,7 +401,7 @@ let make_term (t_ast: Ast.term) (state: State.t)
                 create_term_hole false tp g
             in
             let* _  = t_ast g id in
-            let* t  = wait id in
+            let* t  = wait_hole id in
             let* t  = zonc t in        (* all metas must be zonked *)
             return (Final.Term t)
         )

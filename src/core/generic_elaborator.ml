@@ -1,3 +1,6 @@
+open Std
+
+
 module type ANY = Fmlib_std.Interfaces.ANY
 
 
@@ -28,14 +31,14 @@ struct
 
     (* See Note [Execution State] *)
     type t = {
-        holes:  wait_queue Array_buffer.t;
+        holes:  hole_queue Array_buffer.t;
         mutable ready: task list;
         mutable active: task_data;
         mutable tick:   int;
         mutable tracer: Tracer.t;
     }
 
-    and wait_queue =
+    and hole_queue =
         (* See Note [Holes and Values] *)
         {
             task_id: int list;   (* Task which created the hole *)
@@ -91,7 +94,7 @@ struct
             Tracer.add s.tick s.active.path msg s.tracer
 
 
-    let create (hole: Hole.t) (s: t): int =
+    let create_hole (hole: Hole.t) (s: t): int =
         let queue = {
             hole;
             task_id = s.active.path;
@@ -109,7 +112,7 @@ struct
 
 
 
-    let queue (id: int) (s: t): wait_queue =
+    let queue (id: int) (s: t): hole_queue =
         assert (id < count s);
         Array_buffer.get s.holes id
 
@@ -136,11 +139,11 @@ struct
         (queue id s).value
 
 
-    let put (id: int) (hole: Hole.t) (s: t): unit =
+    let put_hole (id: int) (hole: Hole.t) (s: t): unit =
         (queue id s).hole <- hole
 
 
-    let fill (id: int) (value: Value.t) (s: t): unit =
+    let fill_hole (id: int) (value: Value.t) (s: t): unit =
         let q = queue id s in
         s.ready <-
             List.fold_right
@@ -350,19 +353,19 @@ struct
         k (ST.path s) s
 
 
-    let create (hole: Hole.t): int t =
+    let create_hole (hole: Hole.t): int t =
         fun k s ->
-        k (ST.create hole s) s
+        k (ST.create_hole hole s) s
 
 
-    let get (id: int): Hole.t t =
+    let get_hole (id: int): Hole.t t =
         fun k s ->
         k (ST.hole id s) s
 
 
-    let put (id: int) (hole: Hole.t): unit t =
+    let put_hole (id: int) (hole: Hole.t): unit t =
         fun k s ->
-        ST.put id hole s;
+        ST.put_hole id hole s;
         k () s
 
 
@@ -371,19 +374,19 @@ struct
         k (ST.value id s) s
 
 
-    let update (id: int) (f: Hole.t -> Hole.t): unit t =
+    let update_hole (id: int) (f: Hole.t -> Hole.t): unit t =
         fun k s ->
-        ST.(put id (f (hole id s)) s);
+        ST.(put_hole id (f (hole id s)) s);
         k () s
 
 
-    let fill (id: int) (value: Value.t): unit t =
+    let fill_hole (id: int) (value: Value.t): unit t =
         fun k s ->
-        ST.fill id value s;
+        ST.fill_hole id value s;
         k () s
 
 
-    let wait (id: int): Value.t t =
+    let wait_hole (id: int): Value.t t =
         fun k s ->
         let k1 (_, value) = k value
         and queue = ST.queue id s in
@@ -397,7 +400,7 @@ struct
             k value s
 
 
-    let wait_one (id: int) (id_lst: int list): (int * Value.t) t =
+    let wait_one_of_holes (id: int) (id_lst: int list): (int * Value.t) t =
         fun k s ->
         match ST.find_value id_lst s with
         | None ->
@@ -552,7 +555,7 @@ let test (print_flag: bool) (m: Final.t t) (expect: string): bool =
 
 let make_leaf (id: int) (s: string): unit t =
     let* _ = trace (Printf.sprintf "make (Leaf %s)" s) in
-    fill id (Leaf s)
+    fill_hole id (Leaf s)
 
 
 let simple : Final.t t =
@@ -561,22 +564,22 @@ let simple : Final.t t =
 
 let one_level: Final.t t =
     let* _    = trace "start make (a,b)" in
-    let* id_a = create "a" in
-    let* id_b = create "b" in
+    let* id_a = create_hole "a" in
+    let* id_b = create_hole "b" in
     let* _    = spawn (make_leaf id_a "a") in
     let* _    = spawn (make_leaf id_b "b") in
     let* _    = trace "wait for a" in
-    let* a    = wait id_a in
+    let* a    = wait_hole id_a in
     let* _    = trace "wait for b" in
-    let* b    = wait id_b in
+    let* b    = wait_hole id_b in
     let* _    = trace "end make (a,b)" in
     Node [a; b] |> string_of_tree |> return
 
 
 let one_level2 (block_b: bool): Final.t t =
     let* _    = trace "start make (a,b)" in
-    let* id_a = create "a" in
-    let* id_b = create "b" in
+    let* id_a = create_hole "a" in
+    let* id_b = create_hole "b" in
     let* _    = spawn (make_leaf id_a "a") in
     let* _    =
         if block_b then
@@ -585,40 +588,40 @@ let one_level2 (block_b: bool): Final.t t =
             spawn (make_leaf id_b "b")
     in
     let* _ = trace "wait for 'a' or 'b'" in
-    let* (id_x, x) = wait_one id_a [id_b] in
+    let* (id_x, x) = wait_one_of_holes id_a [id_b] in
     let make t =
         let* _ = trace "end make (a,b)" in
         t |> string_of_tree |> return
     in
     if id_x = id_a then
         let* _ = trace "wait for 'b'" in
-        let* b = wait id_b in
+        let* b = wait_hole id_b in
         make (Node [x; b])
     else
         let* _ = trace "wait for 'a'" in
-        let* a = wait id_a in
+        let* a = wait_hole id_a in
         make (Node [a; x])
 
 
 let one_level_terminate: Final.t t =
     let make_a  id =
-        let* id_a = create "a" in
+        let* id_a = create_hole "a" in
         let* _    = spawn (make_leaf id_a "a") in
         let* _    = trace "wait for a" in
-        let* a    = wait id_a in
+        let* a    = wait_hole id_a in
         let* _    = trace "terminate with a" in
         let* _    = string_of_tree a |> fail in
-        fill id a
+        fill_hole id a
         in
     let* _ = trace "start make (a,b)" in
-    let* id_a = create "a" in
-    let* id_b = create "b" in
+    let* id_a = create_hole "a" in
+    let* id_b = create_hole "b" in
     let* _    = spawn (make_a id_a) in
     let* _    = spawn (make_leaf id_b "b") in
     let* _    = trace "wait for b" in
-    let* b    = wait id_b in
+    let* b    = wait_hole id_b in
     let* _    = trace "wait for a" in
-    let* a    = wait id_a in
+    let* a    = wait_hole id_a in
     let* _    = trace "end make (a,b)" in
     Node [a; b] |> string_of_tree |> return
 

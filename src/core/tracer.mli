@@ -1,4 +1,3 @@
-open Std
 open Fmlib_pretty
 
 include Generic_elaborator.TRACER
