@@ -1,7 +1,11 @@
+open Printf
 open Std
 
 
 module type ANY = Fmlib_std.Interfaces.ANY
+
+
+module Pretty = Fmlib_pretty.Print
 
 
 type range = Fmlib_parse.Position.range
@@ -33,47 +37,8 @@ let make_gamma (g: globals): gamma =
     Gamma.empty g
 
 
-
-
-module Tracer =
-struct
-    type tick    = int
-    type task    = int list
-    type message = Fmlib_pretty.Print.doc
-
-    type t = {
-        trace_flag: bool;
-        messages: (tick * task * message) list;
-    }
-
-
-    let messages t = t.messages
-
-
-    let empty: t = {
-        trace_flag = true;
-        messages = [];
-    }
-
-
-    let ignore: t = {
-        trace_flag = false;
-        messages = [];
-    }
-
-
-
-    let add (tick: tick) (task: task) (message: message) (tr: t): t =
-        if tr.trace_flag then
-            {tr with
-             messages = (tick, task, message) :: tr.messages
-            }
-        else
-            tr
-end
-
-
-
+let doc_of_term (t: term) (): Pretty.doc =
+    Print_term.doc (term_of_term t)
 
 
 
@@ -139,6 +104,25 @@ struct
 
     let type_of (h: t): term =
         h.res_tp
+
+
+    let doc (h: t) (): Pretty.doc =
+        let open Pretty in
+        let arg (t,impl) =
+            let inner =
+                doc_of_term t ()
+                <+> char ':' <+> space
+                <+> doc_of_term (type_of_term t) ()
+            in
+            if impl then
+                space <+> char '{' <+> inner <+> char '}'
+            else
+                space <+> char '(' <+> inner <+> char ')'
+        in
+        text (if h.uni then "c-hole" else "e-hole")
+        <+> cat (List.map arg (Array.to_list h.args))
+        <+> char ':' <+> space
+        <+> doc_of_term h.res_tp ()
 end
 
 
@@ -184,14 +168,25 @@ end
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 *)
 
+let create_hole (h: Hole.t): int t =
+    let open Pretty in
+    let* id = create h in
+    let* _  = trace
+        (fun () ->
+            text (sprintf "?%d" id)
+            <+> space
+            <+> Hole.doc h ())
+    in
+    return id
+
 
 let create_type_hole (uni: bool) (g: gamma): int t =
-    create (Hole.make uni g [||] (Gamma.top 0 g))
+    create_hole (Hole.make uni g [||] (Gamma.top 0 g))
 
 
 
 let create_term_hole (uni: bool) (ty: term) (g: gamma): int t =
-    create (Hole.make uni g [||] ty)
+    create_hole (Hole.make uni g [||] ty)
 
 
 
@@ -231,6 +226,15 @@ let rec head_normal (t: term): term t =
 
 
 let rec unify (eq: bool) (act: term) (req: term): bool t =
+    let* _ =
+        trace (fun () ->
+            let open Pretty in
+            text "unify" <+> space
+            <+> doc_of_term act ()
+            <+> space <+> text "with" <+> space
+            <+> doc_of_term req ()
+        )
+    in
     let* act_hn = head_normal act in
     let* req_hn = head_normal req in
     match

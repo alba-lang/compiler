@@ -17,15 +17,8 @@ val type_of_term:  term -> term
 val make_globals: unit -> globals
 val make_gamma:   globals -> gamma
 
+val doc_of_term: term  -> unit -> Fmlib_pretty.Print.doc
 
-
-module Tracer:
-sig
-    include Generic_elaborator.TRACER
-        with type message := Fmlib_pretty.Print.doc
-
-    val messages: t -> (tick * task * Fmlib_pretty.Print.doc) list
-end
 
 module State:
 sig

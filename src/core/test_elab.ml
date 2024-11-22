@@ -22,7 +22,7 @@ let success_term_tests
 
 
 let execute_success_term_test
-        ((_, trace_flag,src): success_term_test)
+        ((print_res_flag, trace_flag, src): success_term_test)
     : bool
     =
     let open Il_parser in
@@ -51,18 +51,33 @@ let execute_success_term_test
             );
             false
         end
-    else
+    else if print_res_flag then
         begin
             (match final p with
-             | Elab.Final.Empty ->
-                 assert false
              | Elab.Final.Term t ->
-                 Pretty.(Print_term.doc (Elab.term_of_term t) <+> cut)
+
+                 let open Pretty
+                 in
+                 let doc = Elab.doc_of_term t ()
+                 in
+                 let doc =
+                     if trace_flag then
+                         doc <+> cut
+                         <+> Tracer.doc (Elab.State.tracer (Parser.state p))
+                     else
+                         doc <+> cut
+                 in
+                 doc
                  |> Pretty.layout 50
                  |> Pretty.write_to_channel stdout
+
+             | _ ->
+                 assert false (* cannot happen *)
             );
             true
         end
+    else
+        true
 
 
 
