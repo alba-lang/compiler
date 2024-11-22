@@ -32,8 +32,9 @@ struct
     (* See Note [Execution State] *)
     type t = {
         holes:  hole_queue Array_buffer.t;
+        tasks:  task_queue Array_buffer.t;
         mutable ready: task list;
-        mutable active: task_data;
+        mutable active: int;
         mutable tick:   int;
         mutable tracer: Tracer.t;
     }
@@ -41,67 +42,109 @@ struct
     and hole_queue =
         (* See Note [Holes and Values] *)
         {
-            task_id: int list;   (* Task which created the hole *)
+            created_by: int;   (* Task which created the hole *)
             mutable hole: Hole.t;
-            mutable waiting: waiting_task list;
+            mutable hole_waiting: hole_waiting_task list;
             mutable value: Value.t option;
         }
 
+    and task_queue =
+        (* Represents a task *)
+        {
+            path: int list;
+
+            mutable
+                terminated: bool; (* has the task ended? *)
+
+            mutable
+                n_childs: int; (* number of spawned tasks *)
+
+            mutable
+                tasks_waiting: (* Tasks which are waiting for the termination of
+                                  this task. *)
+                task_waiting_task list;
+        }
+
     and task = {
-        action: action;
-        data: task_data;
+        action:  action;
+        task_id: int;
     }
 
-    and waiting_task = {        (* See Note [Waiting Tasks] *)
+    and hole_waiting_task = {        (* See Note [Waiting Tasks] *)
         started: bool ref;
         task: (int * Value.t) -> task;
     }
 
-    and action = t -> Final.t option
-
-    and task_data = {
-        mutable n_childs: int;
-        path: int list;
+    and task_waiting_task = {
+        n_waiting: int ref; (* For how many tasks to terminate is it waiting? *)
+        task_waiting: task;
     }
 
+    and action = t -> Final.t option
 
 
 
-    let make (tracer: Tracer.t): t =
+
+    let make (tracer: Tracer.t) (action: action): t =
+        let tasks = Array_buffer.make () in
+        Array_buffer.push
+            tasks
+            {path = []; n_childs = 0; tasks_waiting = []; terminated = false};
         {
-            ready  = [];
+            ready  = [{action; task_id = 0}];
             holes  = Array_buffer.make ();
-            active = {n_childs = 0; path = []};
-            tick   = 0;
+            tasks;
+            active = -1;
+            tick   = -1;
             tracer;
         }
 
-    
-    let count (s: t): int =
+
+    let count_holes (s: t): int =
         Array_buffer.length s.holes
+
+
+    let count_tasks (s: t): int =
+        Array_buffer.length s.tasks
 
 
     let tick (s: t): int =
         s.tick
 
 
+    let hole_queue (id: int) (s: t): hole_queue =
+        assert (id < count_holes s);
+        Array_buffer.get s.holes id
+
+
+    let task_queue (id: int) (s: t): task_queue =
+        assert (0 <= id);
+        assert (id < count_tasks s);
+        Array_buffer.get s.tasks id
+
+
+    let has_terminated (task_id: int) (s: t): bool =
+        (task_queue task_id s).terminated
+
+
+
     let path (s: t): int list =
-        s.active.path
+        (task_queue s.active s).path
 
 
     let trace (msg: Tracer.message) (s: t): unit =
         s.tracer <-
-            Tracer.add s.tick s.active.path msg s.tracer
+            Tracer.add s.tick (path s) msg s.tracer
 
 
     let create_hole (hole: Hole.t) (s: t): int =
         let queue = {
             hole;
-            task_id = s.active.path;
-            waiting = [];
+            created_by = s.active;
+            hole_waiting = [];
             value = None;
         }
-        and id = count s in
+        and id = count_holes s in
         (*Printf.printf
             "%d: %s create %d\n"
             s.tick
@@ -111,18 +154,12 @@ struct
         id
 
 
-
-    let queue (id: int) (s: t): hole_queue =
-        assert (id < count s);
-        Array_buffer.get s.holes id
-
-
     let find_value (id_lst: int list) (s: t): (int * Value.t) option =
         let rec find = function
             | [] ->
                 None
             | id :: lst ->
-                match (queue id s).value with
+                match (hole_queue id s).value with
                 | None ->
                     find lst
                 | Some value ->
@@ -132,19 +169,19 @@ struct
 
 
     let hole (id: int) (s: t): Hole.t =
-        (queue id s).hole
+        (hole_queue id s).hole
 
 
     let value (id: int) (s: t): Value.t option =
-        (queue id s).value
+        (hole_queue id s).value
 
 
     let put_hole (id: int) (hole: Hole.t) (s: t): unit =
-        (queue id s).hole <- hole
+        (hole_queue id s).hole <- hole
 
 
     let fill_hole (id: int) (value: Value.t) (s: t): unit =
-        let q = queue id s in
+        let q = hole_queue id s in
         s.ready <-
             List.fold_right
                 (fun wait ready ->
@@ -155,59 +192,95 @@ struct
                      else
                          wait.task (id, value) :: ready
                 )
-                q.waiting
+                q.hole_waiting
                 s.ready;
-        q.waiting <- [];
+        q.hole_waiting <- [];
         q.value <- Some value
 
 
-    let put_active_wait
+    let put_active_wait_for_hole
             (id: int)
             (started: bool ref)
             (action: (int * Value.t) -> action)
             (s: t)
         : unit
         =
+        (* Put the active task onto the wait queue of hole [id].
+
+            Precondition: The hole has not yet been filled.
+         *)
         assert (not !started);
-        let q    = queue id s
-        and data = s.active
+        let q    = hole_queue id s
+        and task_id = s.active
         in
         assert (q.value = None);
-        (*Printf.printf
-            "%d: %s wait for %d\n"
-            s.tick
-            (string_of_path s.active.path)
-            id;*)
         let task ival = {
                     action = action ival;
-                    data;
+                    task_id;
                 }
         in
-        q.waiting <-
+        q.hole_waiting <-
             {started; task}
             ::
-            q.waiting
+            q.hole_waiting
 
 
-    let make_child_of_active (action: action) (s: t): task =
-        let data = {
-            n_childs = 0;
-            path = s.active.n_childs :: s.active.path;
-        }
-        in
-        s.active.n_childs <- s.active.n_childs + 1;
-        {action; data}
+
+    let put_active_wait_for_task
+            (id: int)
+            (n_waiting: int ref)
+            (action: action)
+            (s: t)
+        : unit
+        =
+        (* Put the active task on the wait queue of the task [id].
+
+            Precondition: The task [id] has not yet terminated.
+         *)
+        assert (0 <= !n_waiting);
+        let tq = task_queue id s in
+        assert (not tq.terminated);
+        tq.tasks_waiting <-
+            {
+                n_waiting;
+                task_waiting = {action; task_id = s.active};
+            }
+            ::
+            tq.tasks_waiting
 
 
     let spawn (action: action) (s: t): unit =
-        let task = make_child_of_active action s in
-        (*Printf.printf
-            "%d: %s spawn %s, children %d\n"
-            s.tick
-            (string_of_path s.active.path)
-            (string_of_path task.data.path)
-            s.active.n_childs;*)
-        s.ready <- task :: s.ready
+        let active =
+            task_queue s.active s in
+        let queue =
+            {
+                path          = active.n_childs :: active.path;
+                n_childs      = 0;
+                tasks_waiting = [];
+                terminated    = false;
+            }
+        and task_id = count_tasks s
+        in
+        Array_buffer.push s.tasks queue;
+        s.ready <- {action; task_id} :: s.ready
+
+
+
+    let terminate (task_id: int) (s: t): unit =
+        let tq = task_queue task_id s
+        in
+        tq.terminated <- true;
+        List.iter
+            (fun tw ->
+                 assert (0 < !(tw.n_waiting));
+                 tw.n_waiting := !(tw.n_waiting) - 1;
+                 if !(tw.n_waiting) = 0 then
+                     s.ready <- tw.task_waiting :: s.ready
+            )
+            tq.tasks_waiting;
+        tq.tasks_waiting <- []
+
+
 
 
     let pop_ready (s: t): task option =
@@ -220,14 +293,9 @@ struct
 
 
     let step (task: task) (s: t): Final.t option =
-        s.active <- task.data;
-        (*Printf.printf
-            "%d: task %s, children %d\n"
-            s.tick
-            (string_of_path s.active.path)
-            s.active.n_childs;*)
-        let res = task.action s in
+        s.active <- task.task_id;
         s.tick <- s.tick + 1;
+        let res = task.action s in
         res
 
 
@@ -237,35 +305,29 @@ struct
             (tracer: Tracer.t)
         : Final.t * Tracer.t
         =
-        let state = make tracer
-        and task  = {
-            action = root;
-            data = {
-                n_childs = 0;
-                path = [];
-            }
-        }
+        let state = make tracer root
         in
-        let rec exe task =
-            match step task state with
-            | Some final ->
-                (final, state.tracer)
+        let rec exe () =
+            match pop_ready state with
             | None ->
-                match pop_ready state with
-                | Some task ->
-                    exe task
+                assert (count_holes state > 0);
+                fail
+                    (count_holes state)
+                    (fun id ->
+                         let hq = hole_queue id state in
+                         let tq = task_queue hq.created_by state in
+                         tq.path, hq.hole, hq.value
+                    ),
+                state.tracer
+
+            | Some task ->
+                match step task state with
                 | None ->
-                    assert (count state > 0);
-                    let final =
-                        fail
-                            (count state)
-                            (fun id ->
-                                 let q = queue id state in
-                                 (q.task_id, q.hole, q.value))
-                    in
-                    (final, state.tracer)
+                    exe ()
+                | Some final ->
+                    final, state.tracer
         in
-        exe task
+        exe ()
 end
 
 
@@ -304,8 +366,10 @@ struct
         fun _ -> Some (Ok final)
 
 
-    let spawn_continuation ((): unit): action =
-        fun _ -> None
+    let spawn_continuation (task_id: int) ((): unit): action =
+        fun s ->
+        ST.terminate task_id s;
+        None
 
 
     let return (a: 'a): 'a t =
@@ -389,12 +453,12 @@ struct
     let wait_hole (id: int): Value.t t =
         fun k s ->
         let k1 (_, value) = k value
-        and queue = ST.queue id s in
+        and queue = ST.hole_queue id s in
         match queue.value with
         | None ->
             let started = ref false
             in
-            ST.put_active_wait id started k1 s;
+            ST.put_active_wait_for_hole id started k1 s;
             None
         | Some value ->
             k value s
@@ -407,17 +471,37 @@ struct
             let started = ref false
             in
             List.iter
-                (fun id -> ST.put_active_wait id started k s)
+                (fun id -> ST.put_active_wait_for_hole id started k s)
                 (id :: id_lst);
             None
         | Some pair ->
             k pair s
 
 
-    let spawn (task: unit t): unit t =
+    let spawn (task: unit t): int t =
         fun k s ->
-        ST.spawn (task spawn_continuation) s;
-        k () s
+        let id = ST.count_tasks s in
+        ST.spawn (task (spawn_continuation id)) s;
+        k id s
+
+
+    let wait_tasks (id_list: int list): unit t =
+        fun k s ->
+        let n_waiting = ref 0
+        in
+        List.iter
+            (fun task_id ->
+                 if ST.has_terminated task_id s then
+                     ()
+                 else
+                     begin
+                         ST.put_active_wait_for_task task_id n_waiting (k ()) s;
+                         n_waiting := !n_waiting + 1
+                     end
+            )
+            id_list;
+        assert false (* res option *)
+
 
 
     let run
@@ -583,7 +667,7 @@ let one_level2 (block_b: bool): Final.t t =
     let* _    = spawn (make_leaf id_a "a") in
     let* _    =
         if block_b then
-            return ()
+            return (-1)
         else
             spawn (make_leaf id_b "b")
     in

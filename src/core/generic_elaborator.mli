@@ -205,12 +205,15 @@ sig
 
     (**{1 Subtasks} *)
 
-    val spawn: unit t -> unit t
+    val spawn: unit t -> int t
     (** Spawn a subtask. The spawned task is put onto the ready queue. If there
         are task which wait for some holes to be filled, tasks from the ready
-        queue are executed.
+        queue are executed. It returns the id of the new task.
     *)
 
+
+    val wait_tasks: int list -> unit t
+    (** Wait until all tasks in the list are finished. *)
 
 
 
