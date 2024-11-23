@@ -291,7 +291,7 @@ let fill_ehole (id: int) (_: range) (t: term): unit t =
 
 
 
-let zonc_raw: Term.t -> Term.t t = function
+let rec zonc_raw: Term.t -> Term.t t = function
 
     | Sort _  as t ->
 
@@ -300,7 +300,7 @@ let zonc_raw: Term.t -> Term.t t = function
 
     | Meta id ->
 
-        map term_of_term (wait_hole id)
+        map term_of_term (wait_hole id) >>= zonc_raw
 
 
 
