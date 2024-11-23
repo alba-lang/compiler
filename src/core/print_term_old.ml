@@ -1,8 +1,10 @@
 open Fmlib_pretty
-open Term
 open Std
 open Printf
 
+
+module Term = Term_old
+open Term
 
 type doc = Print.doc
 

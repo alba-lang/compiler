@@ -15,7 +15,7 @@ type t = {
 and entry = {
     previous: t;
     info: Info.Bind.t;
-    typ:  Term.pair;        (* Type and the sort of the type. *)
+    typ:  Term.t * Term.t;        (* Type and the sort of the type. *)
     def:  Term.t option;
 }
 
@@ -53,7 +53,7 @@ struct
 
     let make previous info typ def = {previous; info; typ; def}
 
-    let typ (e: t): Term.pair =
+    let typ (e: t): Term.t * Term.t =
         e.typ
 
     let info (e: t): Info.Bind.t =
@@ -128,9 +128,10 @@ let is_prefix (g0: t) (g: t): bool =
 
 
 
-let typ (i: int) (g: t): Term.pair =
+let typ (i: int) (g: t): Term.t * Term.t =
     assert (i < length g);
-    Term.pair_up (length g - i) (Entry.typ (entry i g))
+    assert false
+    (*Term.pair_up (length g - i) (Entry.typ (entry i g))*)
 
 
 
@@ -147,7 +148,7 @@ let find_global (name: Name.t) (g: t): (int * int) list =
 let push_variable
         (bnd: Info.Bind.t)
         (with_map: bool)
-        (tp: Term.pair)
+        (tp: Term.t * Term.t)
         (g: t)
     : t
     =

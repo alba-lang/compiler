@@ -38,7 +38,7 @@ let make_gamma (g: globals): gamma =
 
 
 let doc_of_term (t: term) (): Pretty.doc =
-    Print_term.doc (term_of_term t)
+    Printer.Term.doc (term_of_term t)
 
 
 
@@ -218,10 +218,6 @@ let rec head_normal (t: term): term t =
                 head_normal t
         end
 
-    | _ ->
-
-        assert false
-
 
 
 
@@ -256,10 +252,6 @@ let rec unify (eq: bool) (act: term) (req: term): bool t =
     | _,      Meta id ->
 
         flex_rigid eq false id act_hn
-
-    | _, _ ->
-
-        assert false (* nyi *)
 
 
 
@@ -301,7 +293,7 @@ let fill_ehole (id: int) (_: range) (t: term): unit t =
 
 let zonc_raw: Term.t -> Term.t t = function
 
-    | Sort _ | Local _ | Global _ as t ->
+    | Sort _  as t ->
 
         return t
 
@@ -309,10 +301,6 @@ let zonc_raw: Term.t -> Term.t t = function
     | Meta id ->
 
         map term_of_term (wait_hole id)
-
-    | _ ->
-
-        assert false
 
 
 

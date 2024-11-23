@@ -1,0 +1,219 @@
+open Fmlib_std
+open Std
+
+
+
+(*
+================================================================================
+
+Type definition
+
+================================================================================
+*)
+
+
+type t =
+    (* sorts *)
+    | Sort of Sort.t
+
+    (* variables *)
+    | Local  of Name.t * int        (* De Bruijn index *)
+    | Global of Name.t * int * int  (* Module, id in module *)
+    | Meta   of int
+
+    (* bindings *)
+    | Pi  of var_binder array * pair
+    | Lam of var_binder array * t
+    | Let of let_binder array * t
+
+    (* application *)
+    | App of Info.App.t * t * argument array
+
+    (* inductive types *)
+    | Type of
+          var_binder array   (* parameters *)
+          * var_binder
+          * constructor array
+          * int Name_map.t
+
+    (* pattern match *)
+    | Case of var_binder        (** function variable (for recursion) *)
+              * clause array    (** clauses *)
+              * tree            (** case tree *)
+
+    | Cta  of
+          t         (** refers to pattern match expression *)
+          * tree    (** case tree *)
+          * t array (** collected subterms of the arguments *)
+          * pointer (** pointer into arguments (including arguments) *)
+
+
+and pair = t * t    (* usually a term and its type or a type and its sort *)
+
+and tp  = t  (* synonym *)
+
+
+
+(* Binders
+----------------------------------------------------------------------
+*)
+and var_binder = Info.Bind.t * pair         (* type, sort *)
+
+and let_binder = Info.Bind.t * pair * t     (* type, sort, definition term *)
+
+
+
+(* Argument for Function Application
+----------------------------------------------------------------------
+*)
+and argument = Info.Arg.t * t
+
+
+
+(* Inductive Types
+----------------------------------------------------------------------
+*)
+
+and constructor =
+    Name.t
+    * constructor_arg array
+    * t
+
+and constructor_arg =
+    Info.Bind.t
+    * var_binder array
+    * t
+
+
+(* Pattern Match
+----------------------------------------------------------------------
+*)
+
+and clause =
+    var_binder array (* pattern variables *)
+    * pattern array  (* pattern *)
+    * t              (* right hand side *)
+
+and pattern =
+    | Pvar of int
+    (* nyi: Constants missing !!*)
+    | Pmake of int * pattern array
+
+and tree =
+    | Rhs of t * int * int array (* rhs, clause number, used arguments *)
+    | Node of tree Name_map.t * tree option
+
+and pointer = unit (* nyi *)
+
+
+
+
+
+
+
+
+
+(* Functions *)
+
+
+let map_de_bruijn (f: int -> int) (t: t): t =
+    let rec go nb t =
+        let open Sort in
+        match t with
+        | Sort (Top _) | Sort Prop | Sort (Any _) | Global _ | Meta _ ->
+            t
+
+        | Local (name, i) as t ->
+            if i < nb then
+                t
+            else
+                let j = f (i - nb) in
+                assert (0 <= j);
+                Local (name, j + nb)
+
+        | Pi (args, r) ->
+            Pi (
+                Stdlib.Array.mapi
+                    (fun i (bnd, p) -> bnd, pair_go (nb + i) p)
+                    args,
+                pair_go (nb + Array.length args) r
+            )
+
+        | _ ->
+            assert false (* nyi *)
+
+    and pair_go nb (t, tp) =
+        go nb t,
+        go nb tp
+    in
+
+    go 0 t
+
+
+
+
+let up_from (n: int) (start: int) (t: t): t =
+    if n = 0 then
+        t
+    else
+        map_de_bruijn
+            (fun i ->
+                 if i < start then
+                     i
+                 else
+                     i + n
+            )
+            t
+
+
+let pair_up_from (n: int) (start: int) ((t, tp): pair): pair =
+    up_from n start t,
+    up_from n start tp
+
+
+
+
+
+let up (n: int) (t: t): t =
+    up_from n 0 t
+
+
+
+
+let pair_up (n: int) ((t, tp): pair): pair =
+    up n t,
+    up n tp
+
+
+
+
+
+let prop: t = Sort Prop
+let any0: t = Sort (Any 0)
+let any1: t = Sort (Any 1)
+let top0: t = Sort (Top 0)
+let top1: t = Sort (Top 1)
+
+
+
+let pi_sort (sa: t) (sb: t): t =
+    match sa, sb with
+    | _,     Sort Prop -> Sort Prop
+    | Sort (Any i), Sort (Any j) -> Sort (Any (max i j))
+    | _            -> assert false (* Illegal call *)
+
+
+
+let arrow (a: pair) ((bt, _) as b: pair): t =
+    match bt with
+    | Pi (args, r) ->
+        let args = Array.map (fun (bnd, p) -> bnd, pair_up 1 p) args in
+        let args = Array.push_front (Info.Bind.arrow, a) args in
+        Pi (args, pair_up 1 r)
+    | _ ->
+        Pi ([| Info.Bind.arrow, a|], pair_up 1 b)
+
+
+
+let equal (_: t) (_: t): bool =
+    assert false
