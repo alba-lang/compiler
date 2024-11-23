@@ -26,13 +26,20 @@ and term =
 
 
 
+
+
+let length (g: t): int =
+    Rb_array.length g.content
+
+
+
 let gamma_of_term: term -> t = function
     | Free (g, _)     -> g
     | Typed (g, _, _) -> g
 
 
 let term_of_term: term -> Term.t = function
-    | Free (_, s)    -> Term.Sort s
+    | Free (g, s)    -> Term.(sort s |> up (length g))
     | Typed(_, t, _) -> t
 
 
@@ -67,13 +74,6 @@ struct
 end
 
 
-
-
-
-
-
-let length (g: t): int =
-    Rb_array.length g.content
 
 
 
@@ -178,4 +178,4 @@ let prop (g: t): term =
 
 
 let meta (id: int) (tp: term) (g: t): term =
-    Typed (g, Meta id, tp)
+    Typed (g, Term.meta id, tp)

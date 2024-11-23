@@ -12,8 +12,8 @@ let success_term_tests
     : success_term_test list
     =
     [
-        true, true, "Prop";
-        true, true, "(Any 0)";
+        true,  true,  "Prop";
+        true,  true,  "(Any 0)";
         (*
         true, true, "(arr [Prop] Prop)";
         true, true, "(pi [%x: (Any 0)]: Prop)";

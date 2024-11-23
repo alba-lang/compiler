@@ -1,10 +1,22 @@
 open Std
 open Printf
 
-module Pretty = Fmlib_pretty.Print
+
+
+module Pretty =
+struct
+    include Fmlib_pretty.Print
+
+    let indent = nest 4
+
+    let parens (d: doc): doc =
+        group (char '(' <+> cut <+> indent d <+> cut <+> char ')')
+end
 
 
 type doc = Pretty.doc
+
+
 
 module Term =
 struct
@@ -18,13 +30,13 @@ struct
 
 
     let sort_with_int (full: bool) (s: string) (i: int): edoc =
-        if i = 0 && not full
+        if
+            0 < i && full
         then
-            text s, Prec.highest
-
-        else
             text s <+> space <+> text (sprintf "%d" i),
             Prec.application
+        else
+            text s, Prec.highest
 
 
 
@@ -43,15 +55,33 @@ struct
 
 
     let edoc (full: bool): Term.t -> edoc = function
-        | Sort s ->
+        | _, Sort s ->
             sort full s
 
-        | Meta i ->
+        | _, Meta i ->
             sprintf "?%d" i |> text, Prec.highest
 
 
-    let full_doc (t: Term.t): doc =
-        fst (edoc true t)
+    let left_parens
+            (full: bool)
+            (prec: Prec.t) (* Precedence of root *)
+            (t: Term.t)    (* Term which is a left operand of the root *)
+        : doc
+        =
+        let tdoc, tprec = edoc full t in
+        if
+            Prec.(leaning tprec prec = Left)
+        then
+            tdoc
+        else
+            parens tdoc
+
+
+    let base_doc (par: bool) (full: bool) (t: Term.t): doc =
+        if par then
+            left_parens full Prec.highest t
+        else
+            edoc full t |> fst
 
 
     let doc (t: Term.t): doc =

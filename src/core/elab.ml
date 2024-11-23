@@ -38,7 +38,7 @@ let make_gamma (g: globals): gamma =
 
 
 let doc_of_term (t: term) (): Pretty.doc =
-    Printer.Term.doc (term_of_term t)
+    Printer.Term.base_doc true true (term_of_term t)
 
 
 
@@ -203,11 +203,11 @@ let rec head_normal (t: term): term t =
     match
         term_of_term t
     with
-    | Sort _ ->
+    | _, Sort _ ->
 
         return t
 
-    | Meta id ->
+    | _, Meta id ->
 
         begin
             let* v = value_opt id in
@@ -237,19 +237,19 @@ let rec unify (eq: bool) (act: term) (req: term): bool t =
         term_of_term act_hn,
         term_of_term req_hn
     with
-    | Sort s_act, Sort s_req ->
+    | (_, Sort s_act), (_, Sort s_req) ->
 
         return (Sort.unify eq s_act s_req)
 
-    | Meta _, Meta _ ->
+    | (_, Meta _), (_, Meta _) ->
 
         assert false
 
-    | Meta id, _ ->
+    | (_, Meta id), _ ->
 
         flex_rigid eq true id req_hn
 
-    | _,      Meta id ->
+    | _,      (_, Meta id) ->
 
         flex_rigid eq false id act_hn
 
@@ -263,7 +263,7 @@ and flex_rigid (eq: bool) (sub: bool) (id: int) (t: term): bool t =
     in
     if Hole.is_unifiable h && Gamma.is_prefix gt gm then
         let* ok =
-            unify false (type_of_term t) (type_of_term (Hole.type_of h))
+            unify false (type_of_term t) (Hole.type_of h)
         in
         if ok then
             let* _ = fill_hole id t in
@@ -291,28 +291,27 @@ let fill_ehole (id: int) (_: range) (t: term): unit t =
 
 
 
-let rec zonc_raw: Term.t -> Term.t t = function
+let rec zonk_raw: Term.t -> Term.t t = function
 
-    | Sort _  as t ->
+    | _, Sort _  as t ->
 
         return t
 
+    | _, Meta id ->
 
-    | Meta id ->
-
-        map term_of_term (wait_hole id) >>= zonc_raw
-
+        map term_of_term (wait_hole id) >>= zonk_raw
 
 
-let rec zonc:  term -> term t = function
+
+let rec zonk:  term -> term t = function
     | Free _ as t ->
 
         return t
 
     | Typed (g, t_raw, tp) ->
 
-        let* t_raw = zonc_raw t_raw in
-        let* tp    = zonc tp in
+        let* t_raw = zonk_raw t_raw in
+        let* tp    = zonk tp in
         return (Gamma.Typed (g, t_raw, tp))
 
 
@@ -390,7 +389,7 @@ let make_term (t_ast: Ast.term) (state: State.t)
             in
             let* _  = t_ast g id in
             let* t  = wait_hole id in
-            let* t  = zonc t in        (* all metas must be zonked *)
+            let* t  = zonk t in        (* all metas must be zonked *)
             return (Final.Term t)
         )
         state
