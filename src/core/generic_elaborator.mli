@@ -191,14 +191,20 @@ sig
         filled. *)
 
 
-    val wait_one_of_holes:  int -> int list -> (int * Value.t) t
-    (** [wait_one hole_id list]
 
-        Wait for the filling of one of the holes in the list [hole_id :: list].
-        Return the id of the filled hole and its value after one of the holes
-        has been filled.
+
+    type 'a hole_callback = int * (Value.t -> 'a t)
+    (** Callback type for waiting for a hole fill. *)
+
+
+
+    val wait_one_of_holes: 'a hole_callback -> 'a hole_callback list -> 'a t
+    (** [wait_one_of_holes h1 list]
+
+        Wait for he filling of one of the holes in the list [h1 :: list]. If one
+        of the holes is filled, the corresponding callback is called with the
+        value.
     *)
-
 
 
 

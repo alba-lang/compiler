@@ -72,7 +72,7 @@ struct
 
     and hole_waiting_task = {        (* See Note [Waiting Tasks] *)
         started: bool ref;
-        task: (int * Value.t) -> task;
+        task: Value.t -> task;
     }
 
     and task_waiting_task = {
@@ -154,19 +154,6 @@ struct
         id
 
 
-    let find_value (id_lst: int list) (s: t): (int * Value.t) option =
-        let rec find = function
-            | [] ->
-                None
-            | id :: lst ->
-                match (hole_queue id s).value with
-                | None ->
-                    find lst
-                | Some value ->
-                    Some (id, value)
-        in
-        find id_lst
-
 
     let hole (id: int) (s: t): Hole.t =
         (hole_queue id s).hole
@@ -190,7 +177,7 @@ struct
                      if started then
                          ready
                      else
-                         wait.task (id, value) :: ready
+                         wait.task value :: ready
                 )
                 q.hole_waiting
                 s.ready;
@@ -201,7 +188,7 @@ struct
     let put_active_wait_for_hole
             (id: int)
             (started: bool ref)
-            (action: (int * Value.t) -> action)
+            (action: Value.t -> action)
             (s: t)
         : unit
         =
@@ -402,6 +389,9 @@ struct
 
     (* Monadic functions *)
 
+    type 'a hole_callback = int * (Value.t -> 'a t)
+
+
     let trace (msg: Tracer.message): unit t =
         fun k s ->
         k (ST.trace msg s) s
@@ -452,18 +442,55 @@ struct
 
     let wait_hole (id: int): Value.t t =
         fun k s ->
-        let k1 (_, value) = k value
-        and queue = ST.hole_queue id s in
+        let queue = ST.hole_queue id s in
         match queue.value with
         | None ->
             let started = ref false
             in
-            ST.put_active_wait_for_hole id started k1 s;
+            ST.put_active_wait_for_hole id started k s;
             None
         | Some value ->
             k value s
 
 
+
+    let wait_one_of_holes
+            (first: 'a hole_callback)
+            (lst:   'a hole_callback list)
+        : 'a t
+        =
+        fun k s ->
+        let list = first :: lst
+        in
+        let rec find = function
+            | [] ->
+                make_wait () (* Not value found *)
+
+            | (id, cb) :: rest ->
+                match ST.value id s with
+                | None ->
+                    find rest
+                | Some value ->
+                    cb value k s
+
+        and make_wait () =
+            let started = ref false
+            in
+            List.iter
+                (fun (id, cb) ->
+                     let action value =
+                         cb value k
+                     in
+                     ST.put_active_wait_for_hole id started action s
+                )
+                list;
+            None
+        in
+        find list
+
+
+
+(*
     let wait_one_of_holes (id: int) (id_lst: int list): (int * Value.t) t =
         fun k s ->
         match ST.find_value id_lst s with
@@ -476,6 +503,8 @@ struct
             None
         | Some pair ->
             k pair s
+*)
+
 
 
     let spawn (task: unit t): int t =
@@ -672,19 +701,20 @@ let one_level2 (block_b: bool): Final.t t =
             spawn (make_leaf id_b "b")
     in
     let* _ = trace "wait for 'a' or 'b'" in
-    let* (id_x, x) = wait_one_of_holes id_a [id_b] in
     let make t =
         let* _ = trace "end make (a,b)" in
         t |> string_of_tree |> return
     in
-    if id_x = id_a then
+    let cb_a a =
         let* _ = trace "wait for 'b'" in
         let* b = wait_hole id_b in
-        make (Node [x; b])
-    else
+        make (Node [a; b])
+    and cb_b b =
         let* _ = trace "wait for 'a'" in
         let* a = wait_hole id_a in
-        make (Node [a; x])
+        make (Node [a; b])
+    in
+    wait_one_of_holes (id_a, cb_a) [id_b, cb_b]
 
 
 let one_level_terminate: Final.t t =
