@@ -4,7 +4,6 @@
 - {{!Std} Std}
 - {{!Lib} Lib}
 - {{!Core} Core}
-- {{!Elab} Elab}
 - {{!page-parse} Parsing} {{!Alba_parse} API}
 - {{!page-files} Alba Files}
 - {{!page-core}  Core Library}
