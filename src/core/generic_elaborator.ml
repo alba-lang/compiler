@@ -248,6 +248,7 @@ struct
             }
         and task_id = count_tasks s
         in
+        active.n_childs <- active.n_childs + 1;
         Array_buffer.push s.tasks queue;
         s.ready <- {action; task_id} :: s.ready
 

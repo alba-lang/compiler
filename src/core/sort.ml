@@ -13,6 +13,19 @@ let type_of: t -> t = function
     | Top i  -> Top (i + 1)
 
 
+let pi (s1: t) (s2: t): t =
+    match s1, s2 with
+    | Any _, Prop ->
+        Prop
+
+    | Any i, Any j ->
+        Any (max i j)
+
+    | _, _ ->
+        assert false (* illegal argument *)
+
+
+
 let unify (eq: bool) (s_act: t) (s_req: t): bool =
     if eq then
         s_act = s_req

@@ -23,14 +23,15 @@ sig
 
     type t
 
-    val typ:  t -> Term.t * Term.t
+    val typ:  t -> term
 
     val info: t -> Info.Bind.t
 
-    val definition: t -> Term.t option
+    val definition: t -> term option
 
     val gamma: t -> gamma
 end
+
 
 val length: t -> int
 
@@ -51,7 +52,7 @@ val is_prefix: t -> t -> bool
 
 
 
-val typ: int -> t -> Term.t * Term.t
+val typ: int -> t -> term
 (** [typ i g] Type of the [i]th entry. *)
 
 
@@ -61,8 +62,10 @@ val find_local: Name.t -> t -> int option
 val find_global: Name.t -> t -> (int * int) list
 
 
-val push_variable: Info.Bind.t -> bool -> (Term.t * Term.t)  ->  t -> t
+val push_variable: Info.Bind.t -> bool -> term  ->  t -> t
 
+
+val make_pi: term -> t -> t -> term
 
 val globals: t -> Globals.t
 

@@ -9,3 +9,5 @@ val type_of: t -> t
 
 
 val unify: bool -> t -> t -> bool
+
+val pi: t -> t -> t

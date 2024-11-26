@@ -15,8 +15,8 @@ type t = {
 and entry = {
     previous: t;
     info: Info.Bind.t;
-    typ:  Term.t * Term.t;        (* Type and the sort of the type. *)
-    def:  Term.t option;
+    typ:  term;
+    def:  term option;
 }
 
 and term =
@@ -50,6 +50,19 @@ let type_of_term: term -> term = function
         tp
 
 
+let make_sort (s: Term.t) (g: t): term =
+    match s with
+    | (_, Sort s0) ->
+        Free (g, s0)
+
+    | _ ->
+        assert false (* nyi: Polymorphic Any *)
+
+
+
+
+
+
 
 module Entry =
 struct
@@ -60,13 +73,13 @@ struct
 
     let make previous info typ def = {previous; info; typ; def}
 
-    let typ (e: t): Term.t * Term.t =
+    let typ (e: t): term =
         e.typ
 
     let info (e: t): Info.Bind.t =
         e.info
 
-    let definition (e: t): Term.t option =
+    let definition (e: t): term option =
         e.def
 
     let gamma (e: t): gamma =
@@ -128,7 +141,7 @@ let is_prefix (g0: t) (g: t): bool =
 
 
 
-let typ (i: int) (g: t): Term.t * Term.t =
+let typ (i: int) (g: t): term =
     assert (i < length g);
     assert false
     (*Term.pair_up (length g - i) (Entry.typ (entry i g))*)
@@ -148,7 +161,7 @@ let find_global (name: Name.t) (g: t): (int * int) list =
 let push_variable
         (bnd: Info.Bind.t)
         (with_map: bool)
-        (tp: Term.t * Term.t)
+        (tp: term)
         (g: t)
     : t
     =
@@ -161,6 +174,36 @@ let push_variable
           else
               g.map;
     }
+
+
+
+
+
+let make_pi (t: term) (g: t) (g0: t): term =
+    assert (length g0 <= length g);
+    let rec make_args i (args, s) =
+        if i = length g0 then
+            args, s
+        else
+            let i = i - 1
+            in
+            let e = entry i g in
+            assert (e.def = None);
+            let ty = term_of_term e.typ in
+            let st = term_of_term (type_of_term e.typ) in
+            let s  = Term.pi_sort st s in
+            make_args i ((e.info, ty, s) :: args, s)
+    in
+    let res  = term_of_term t in
+    let sres = term_of_term (type_of_term t)
+    in
+    let args, s = make_args (length g) ([], sres)
+    in
+    let args = Array.of_list args
+    in
+    let pi = Term.pi args (res, sres) in
+    Typed (g0, pi, make_sort s g0)
+
 
 
 

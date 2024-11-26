@@ -5,7 +5,7 @@ open Fmlib_parse
 module type ANY = Fmlib_std.Interfaces.ANY
 
 
-type 'a located = Position.range * 'a
+type range      = Position.range
 
 
 
@@ -34,17 +34,84 @@ module CP   = Character.Make (Elab.State) (Elab.Final) (Error)
 
 include CP
 
+
+
 type term = Elab.Ast.term
+
+
+
+
+let (|=) (mf: ('a -> 'b) t) (ma: 'a t): 'b t =
+    let* f = mf in
+    let* a = ma in
+    return (f a)
+
+
+
+let (|.) (mf: ('a -> 'b) t) (m: _ t): ('a -> 'b) t =
+    let* f = mf in
+    let* _ = m  in
+    return f
+
+
+let _ = (|=), (|.)
+
+
 
 
 let whitespace: int t =
     skip_zero_or_more (char ' ' </> char '\n')
 
 
+
 let ws_after (p: 'a t): 'a t =
     let* a = p in
     let* _ = whitespace in
     return a
+
+
+
+let ws_before (p: 'a t): 'a t =
+    let* _ = whitespace in
+    p
+
+
+
+let ws_around (p: 'a t): 'a t =
+    ws_before p |> ws_after
+
+let _ = ws_around
+
+
+
+let zero_or_more_rev (p: 'a t): (int * 'a list) t =
+    let rec scan n lst =
+        (
+            let* a = p in
+            scan (n + 1) (a :: lst)
+        )
+        </>
+        return (n, lst)
+    in
+    scan 0 []
+let _ = zero_or_more_rev
+
+
+
+let one_or_more_rev (p: 'a t): (int * 'a list * 'a) t =
+    let rec scan n lst a0 =
+        (
+            let* a = p in
+            scan (n + 1) (a0 :: lst) a
+        )
+        </>
+        return (n, lst, a0)
+    in
+    let* a = p in
+    scan 0 [] a
+
+
+
 
 
 let identifier: string t =
@@ -56,14 +123,17 @@ let digits: string t =
 
 
 
-
-let tagged (p: string located -> 'a t): 'a t =
-    let* _ = char '(' |> ws_after in
-    let* tag = located identifier |> ws_after in
+let tagged (p: string -> 'a t): 'a t =
+    let* _   = char '(' |> ws_after in
+    let* tag = ws_after identifier in
     let* a   = p tag |> ws_after in
     let* _ = char ')'in
     return a
 
+
+
+let tagged_term (p: string -> (range -> term) t): term t =
+    map (fun (range, f) -> f range) (p |> tagged |> located)
 
 
 
@@ -104,10 +174,10 @@ let atomic_term: term t =
 let rec term (): term t =
     atomic_term
     </>
-    tagged compound_term
+    tagged_term compound_term
 
 
-and compound_term ((_, tag): string located): term t =
+and compound_term (tag: string): (range -> term) t =
     match tag with
     | "var" ->
         (* local variable *)
@@ -117,11 +187,11 @@ and compound_term ((_, tag): string located): term t =
     | "Any" ->
         any ()
 
-    | "app" ->
+    | "ap" ->
         assert false
 
-    | "arr" ->
-        assert false
+    | "ar" ->
+        arrow ()
 
     | "pi" ->
         assert false
@@ -130,9 +200,15 @@ and compound_term ((_, tag): string located): term t =
         assert false (* Error case *)
 
 
-and any (): term t =
-    let* range, level = located digits in
-    Elab.any range (int_of_string level) |> return
+
+and any (): (range -> term) t =
+    map (fun dstr -> Elab.any (int_of_string dstr)) digits
+
+
+
+and arrow (): (range -> term) t =
+    let* n, lst, res = one_or_more_rev (term () |> ws_before) in
+    Elab.arrow lst n res |> return
 
 
 

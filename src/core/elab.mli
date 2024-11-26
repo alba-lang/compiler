@@ -54,6 +54,10 @@ end
 
 val prop: range -> Ast.term
 
-val any:  range -> int -> Ast.term
+val any:  int -> range -> Ast.term
+
+val arrow: Ast.term list -> int  -> Ast.term -> range ->  Ast.term
+
+
 
 val make_term: Ast.term -> State.t -> (Final.t, Error.t) result * State.t

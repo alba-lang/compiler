@@ -85,22 +85,63 @@ end
 
 
 
+
+
+
+
+
 module Hole =
 struct
+    type info =
+        | Elab of
+              int option (* parent hole *)
+        | Constraint
     type t = {
-        uni: bool;      (* can be filled by constraint solving *)
-        gamma: gamma;   (* context of the metavariable *)
+        info: info;
+        gamma: gamma;
         args: (term * bool) array;
         res_tp: term;
     }
 
-    let make uni gamma args res_tp = {uni; gamma; args; res_tp}
+    let e_type (parent: int option) (gamma: gamma): t =
+        (* Create a type hole for an elaborated type (i.e. present in the source
+           code). *)
+        {
+            info = Elab parent;
+            gamma;
+            args = [||];
+            res_tp = Gamma.top 0 gamma;
+        }
+
+
+    let e_term (parent: int option) (res_tp: term) (gamma: gamma): t =
+        {
+            info = Elab parent;
+            gamma;
+            args = [||];
+            res_tp
+        }
+
+
+    let c_type gamma =
+        {
+            info = Constraint;
+            gamma;
+            args = [||];
+            res_tp = Gamma.top 0 gamma;
+        }
+
+
 
     let gamma (h: t): gamma =
         h.gamma
 
+
     let is_unifiable (h: t): bool =
-        h.uni
+        match h.info with
+        | Elab _ -> false
+        | _      -> true
+
 
     let type_of (h: t): term =
         h.res_tp
@@ -119,7 +160,7 @@ struct
             else
                 space <+> char '(' <+> inner <+> char ')'
         in
-        text (if h.uni then "c-hole" else "e-hole")
+        text (if is_unifiable h then "c-hole" else "e-hole")
         <+> cat (List.map arg (Array.to_list h.args))
         <+> char ':' <+> space
         <+> doc_of_term h.res_tp ()
@@ -128,10 +169,18 @@ end
 
 
 
+
+
+
+
 module Value =
 struct
     type t = term
 end
+
+
+
+
 
 
 
@@ -146,10 +195,78 @@ end
 
 
 
+
+
+
+
+
+
 module GE =
-    Generic_elaborator.Make (Hole) (Value) (Tracer) (Final) (Error)
+struct
+    include Generic_elaborator.Make (Hole) (Value) (Tracer) (Final) (Error)
+
+    let create_hole (h: Hole.t): int t =
+        let open Pretty in
+        let* id = create_hole h in
+        let* _  = trace
+            (fun () ->
+                text (sprintf "?%d" id)
+                <+> space
+                <+> Hole.doc h ())
+        in
+        return id
+
+
+    let fill_hole (id: int) (t: term): unit t =
+        let open Pretty in
+        let* _ =
+            trace
+                (fun _ ->
+                     text (sprintf "?%d :=" id)
+                     <+> space
+                     <+> doc_of_term t ()
+                )
+        in
+        fill_hole id t
+
+
+    let meta (id: int): term t =
+        let* h = get_hole id in
+        Gamma.meta id h.res_tp h.gamma |> return
+end
+
+
+
+
+
+
 
 open GE
+
+
+
+
+
+module ListM =
+struct
+    include Fmlib_std.List.Monadic (GE)
+end
+
+
+module IntM =
+struct
+    let iter (n: int) (f: int -> unit GE.t): unit t =
+        let rec iter i =
+            if i = n then
+                return ()
+            else
+                let* _ = f i in
+                iter (i + 1)
+        in
+        iter 0
+
+    let _ = iter
+end
 
 
 
@@ -163,36 +280,15 @@ end
 
 
 
+
+
+
+
+
 (*
     Internal Functions
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 *)
-
-let create_hole (h: Hole.t): int t =
-    let open Pretty in
-    let* id = create_hole h in
-    let* _  = trace
-        (fun () ->
-            text (sprintf "?%d" id)
-            <+> space
-            <+> Hole.doc h ())
-    in
-    return id
-
-
-let create_type_hole (uni: bool) (g: gamma): int t =
-    create_hole (Hole.make uni g [||] (Gamma.top 0 g))
-
-
-
-let create_term_hole (uni: bool) (ty: term) (g: gamma): int t =
-    create_hole (Hole.make uni g [||] ty)
-
-
-
-let meta (id: int): term t =
-    let* h = get_hole id in
-    Gamma.meta id h.res_tp h.gamma |> return
 
 
 
@@ -217,6 +313,10 @@ let rec head_normal (t: term): term t =
             | Some t ->
                 head_normal t
         end
+
+    | _, Pi _  ->
+
+        return t
 
 
 
@@ -252,6 +352,18 @@ let rec unify (eq: bool) (act: term) (req: term): bool t =
     | _,      (_, Meta id) ->
 
         flex_rigid eq false id act_hn
+
+    | (_, Pi _),  (_, Pi _) ->
+
+        assert false
+
+    | (_, Pi _),  _ ->
+
+        assert false
+
+    | _,  (_, Pi _) ->
+
+        assert false
 
 
 
@@ -291,6 +403,8 @@ let fill_ehole (id: int) (_: range) (t: term): unit t =
 
 
 
+
+
 let rec zonk_raw: Term.t -> Term.t t = function
 
     | _, Sort _  as t ->
@@ -300,6 +414,24 @@ let rec zonk_raw: Term.t -> Term.t t = function
     | _, Meta id ->
 
         map term_of_term (wait_hole id) >>= zonk_raw
+
+    | _, Pi (n, args, (r, s)) ->
+        assert (n = Array.length args);
+        let args = Array.copy args in
+        let* _ =
+            IntM.iter
+                (Array.length args)
+                (fun i ->
+                     let (b, ty, s) = args.(i) in
+                     let* ty = zonk_raw ty in
+                     let* s  = zonk_raw s in
+                     args.(i) <-  (b, ty, s);
+                     return ()
+                )
+        in
+        let* r = zonk_raw r in
+        let* s = zonk_raw s in
+        return Term.(pi args (r, s))
 
 
 
@@ -354,22 +486,86 @@ let run_ge (m: Final.t GE.t) (state: State.t)
 
 
 
+let elab_term (ast: Ast.term) (g: gamma) (id: int): int t =
+    spawn (ast g id)
+
+
+
+
+
+
+
+
 (*
     External Functions
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 *)
 
 
-
 let prop (range: range): Ast.term =
     fun g id ->
+    let* _ = trace (fun _ -> Pretty.text "Make Prop")
+    in
     fill_ehole id range (Gamma.prop g)
 
 
 
-let any (range: range) (level: int): Ast.term =
+let any (level: int) (range: range): Ast.term =
     fun g id ->
+    let* _ = trace (fun _ -> Pretty.text (sprintf "Make (Any %d)" level))
+    in
     fill_ehole id range (Gamma.any level g)
+
+
+
+let arrow
+        (args: Ast.term list)
+        (_: int)
+        (res: Ast.term)
+        (range: range)
+    : Ast.term
+    (* A -> B -> ... -> R
+
+       is equivalent to
+
+        all (_: A) (_: B) ... : R
+    *)
+    =
+    fun g0 root ->
+        let args =
+            List.rev args
+        in
+        let* _ =
+            trace
+                (fun _ ->
+                     Pretty.text
+                         (sprintf
+                              "Make arrow with %d arguments"
+                              (List.length args))
+                )
+        in
+        let* g =
+            ListM.fold_left
+                (fun arg g ->
+                     let* h_id = create_hole (Hole.e_type (Some root) g0) in
+                     let* _    = elab_term arg g h_id in
+                     let* tp   = wait_hole h_id in
+                     let* tp   = zonk tp in (* ??? *)
+                     let  g    =
+                         Gamma.push_variable
+                             Info.Bind.arrow false tp g
+                     in
+                     return g
+                )
+                args
+                g0
+        in
+        let* h_id  = create_hole (Hole.e_type (Some root) g0) in
+        let* _     = elab_term res g h_id in
+        let* res   = wait_hole h_id in
+        let* res   = zonk res in        (* ??? *)
+        fill_ehole root range (Gamma.make_pi res g g0)
+
 
 
 
@@ -382,12 +578,16 @@ let make_term (t_ast: Ast.term) (state: State.t)
         (
             let  g  = state.gamma
             in
-            let* id =
-                let* tp_id = create_type_hole true g in
-                let* tp = meta tp_id in
-                create_term_hole false tp g
+            let* _  =
+                trace
+                    (fun _ -> Pretty.(wrap_words "Make top level term"))
             in
-            let* _  = t_ast g id in
+            let* id =
+                let* tp_id = create_hole (Hole.c_type g) in
+                let* tp = meta tp_id in
+                create_hole (Hole.e_term None tp g)
+            in
+            let* _  = spawn (t_ast g id) in
             let* t  = wait_hole id in
             let* t  = zonk t in        (* all metas must be zonked *)
             return (Final.Term t)

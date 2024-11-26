@@ -46,7 +46,10 @@ let doc (t: t): Fmlib_pretty.Print.doc =
                      ","
                      (List.rev_map (sprintf "%d") task))
         in
-        group (text hdr <+> space <+> nest 4 (doc ()))
+        group (
+            text hdr
+            <+> break "           "
+            <+> nest 4 (doc ()))
         <+> cut
     in
     cat (List.rev_map entry t.messages)

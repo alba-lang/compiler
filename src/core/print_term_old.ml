@@ -60,7 +60,7 @@ let rec doc_with_precedence (t: t): doc * Precedence.t =
         Precedence.highest
 
     | Pi (args, res) ->
-        pi 0 args res
+        pi_normal 0 args res
 
     | Lam _ ->
         assert false
@@ -107,7 +107,7 @@ and right_parenthesized
         parenthesized tdoc
 
 
-and pi
+and pi_normal
         (start: int) (args: var_binder array) ((tp, _) as tp_pair: pair)
     : Print.doc * Precedence.t
     =

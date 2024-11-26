@@ -12,10 +12,10 @@ let success_term_tests
     : success_term_test list
     =
     [
-        true,  true,  "Prop";
-        true,  true,  "(Any 0)";
+        false, false, "Prop";
+        false, false, "(Any 0)";
+        true,  true,  "(ar (Any 1) Prop (Any 0))";
         (*
-        true, true, "(arr [Prop] Prop)";
         true, true, "(pi [%x: (Any 0)]: Prop)";
         *)
     ]
@@ -58,7 +58,10 @@ let execute_success_term_test
 
                  let open Pretty
                  in
-                 let doc = Elab.doc_of_term t ()
+                 let doc =
+                     Elab.doc_of_term t ()
+                     <+> text ": "
+                     <+> Elab.(doc_of_term (type_of_term t) ())
                  in
                  let doc =
                      if trace_flag then
