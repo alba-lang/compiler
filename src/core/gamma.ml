@@ -50,6 +50,13 @@ let type_of_term: term -> term = function
         tp
 
 
+
+
+let string_of_term (t: term): string =
+    Printer.Term.base_string true true (term_of_term t)
+let _ = string_of_term
+
+
 let make_sort (s: Term.t) (g: t): term =
     match s with
     | (_, Sort s0) ->
@@ -112,6 +119,17 @@ let empty (globals: Globals.t) : t =
 let entry (i: int) (g: t): Entry.t =
     assert (i < length g);
     Rb_array.element i g.content
+
+
+
+let entry_of_bruijn (i: int) (g: t): Entry.t =
+    entry (de_bruijn i g) g
+
+
+
+let previous (g: t): t =
+    assert (0 < length g);
+    (entry_of_bruijn 0 g).previous
 
 
 
@@ -178,6 +196,32 @@ let push_variable
 
 
 
+let make_pi1 (b: Info.Bind.t) (tp: term) (rtp: term): term =
+    let g0 = gamma_of_term tp
+    and g  = gamma_of_term rtp in
+    Printf.printf
+        "Gamma.make_pi1 g0 %d, g %d,  tp %s, rtp %s\n"
+        (length g0)
+        (length g)
+        (string_of_term tp)
+        (string_of_term rtp);
+    assert (g0 == previous g);
+    let s1 = term_of_term (type_of_term tp)
+    and s2 = term_of_term (type_of_term rtp)
+    in
+    Typed (
+        g0
+        ,
+        Term.pi1
+            (b, term_of_term tp, s1)
+            (term_of_term rtp, s2)
+        ,
+        make_sort (Term.pi_sort s1 s2) g0
+    )
+
+
+
+
 
 let make_pi (t: term) (g: t) (g0: t): term =
     assert (length g0 <= length g);
@@ -209,15 +253,15 @@ let make_pi (t: term) (g: t) (g0: t): term =
 
 
 let any (level: int) (g: t): term =
-    Free (gamma0 g, Sort.Any level)
+    Free (g, Sort.Any level)
 
 
 let top (level: int) (g: t): term =
-    Free (gamma0 g, Sort.Top level)
+    Free (g, Sort.Top level)
 
 
 let prop (g: t): term =
-    Free (gamma0 g, Sort.Prop)
+    Free (g, Sort.Prop)
 
 
 let meta (id: int) (tp: term) (g: t): term =

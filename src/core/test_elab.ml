@@ -12,12 +12,20 @@ let success_term_tests
     : success_term_test list
     =
     [
-        false, false, "Prop";
-        false, false, "(Any 0)";
-        true,  true,  "(ar (Any 1) Prop (Any 0))";
         (*
-        true, true, "(pi [%x: (Any 0)]: Prop)";
-        *)
+        false, false,
+        "Prop"
+        ;
+        false, false,
+        " ( Any 0 ) "
+        ;
+        false, false,
+        "(ar (Any 1 ) Prop (Any 0))"
+        ;
+           *)
+        true, true,
+        "(pi ((%x (Any 1)) (%y (Any 0))) Prop)"
+        ;
     ]
 
 
@@ -39,16 +47,33 @@ let execute_success_term_test
     let p = term_parser state in
     let p = run_on_string src p
     in
+    Printf.printf
+        "%d tracer messages\n"
+        (Tracer.count (Elab.State.tracer (Parser.state p)));
     let module Reporter =
-        Error_reporter.Make (Parser) in
+        Error_reporter.Make (Parser)
+    in
+    let doc_with_tracer doc =
+        if trace_flag then
+            let open Pretty
+            in
+            doc
+            <+>
+            Tracer.doc (Elab.State.tracer (Parser.state p))
+        else
+            doc
+    in
     if not (has_succeeded p) then
         begin
-            Reporter.(
-                make Error.range Error.doc p
-                |> run_on_string src
-                |> Pretty.layout 50
-                |> Pretty.write_to_channel stdout
-            );
+            (
+                doc_with_tracer
+                Reporter.(
+                    make Error.range Error.doc p
+                    |> run_on_string src
+                )
+            )
+            |> Pretty.layout 70
+            |> Pretty.write_to_channel stdout;
             false
         end
     else if print_res_flag then
@@ -64,11 +89,7 @@ let execute_success_term_test
                      <+> Elab.(doc_of_term (type_of_term t) ())
                  in
                  let doc =
-                     if trace_flag then
-                         doc <+> cut
-                         <+> Tracer.doc (Elab.State.tracer (Parser.state p))
-                     else
-                         doc <+> cut
+                     doc_with_tracer (doc <+> cut)
                  in
                  doc
                  |> Pretty.layout 50

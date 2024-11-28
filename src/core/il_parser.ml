@@ -7,6 +7,8 @@ module type ANY = Fmlib_std.Interfaces.ANY
 
 type range      = Position.range
 
+type 'a located = range * 'a
+
 
 
 module Char = struct
@@ -80,14 +82,12 @@ let ws_before (p: 'a t): 'a t =
 let ws_around (p: 'a t): 'a t =
     ws_before p |> ws_after
 
-let _ = ws_around
-
 
 
 let zero_or_more_rev (p: 'a t): (int * 'a list) t =
     let rec scan n lst =
         (
-            let* a = p in
+            let* a = ws_before p in
             scan (n + 1) (a :: lst)
         )
         </>
@@ -101,7 +101,7 @@ let _ = zero_or_more_rev
 let one_or_more_rev (p: 'a t): (int * 'a list * 'a) t =
     let rec scan n lst a0 =
         (
-            let* a = p in
+            let* a = ws_before p in
             scan (n + 1) (a0 :: lst) a
         )
         </>
@@ -118,17 +118,32 @@ let identifier: string t =
     word Char.is_letter Char.is_alpha_num_ "identifier"
 
 
+
+let name: Name.t t =
+    let* _ = char '%' in
+    identifier |> map Name.normal
+
+
+
 let digits: string t =
     word Char.is_digit Char.is_digit "digits"
 
 
 
-let tagged (p: string -> 'a t): 'a t =
-    let* _   = char '(' |> ws_after in
-    let* tag = ws_after identifier in
-    let* a   = p tag |> ws_after in
-    let* _ = char ')'in
+let parens_generic (left: _ t) (p: 'a t) (right: _ t): 'a t =
+    let* _ = left in
+    let* a = ws_around p in
+    let* _ = right in
     return a
+
+
+let parens (p: 'a t): 'a t =
+    parens_generic (char '(') p (char ')')
+
+
+
+let tagged (p: string -> 'a t): 'a t =
+    parens (ws_after identifier >>= p)
 
 
 
@@ -137,22 +152,9 @@ let tagged_term (p: string -> (range -> term) t): term t =
 
 
 
-let name: term t =
-    let* _ = char '%' in
-    let* _ = identifier in
-    assert false
-
-
-let int_level: term t =
-    let* _ = digits in
-    assert false
-
-
 let atomic_term: term t =
-    name
-    </>
-    int_level
-    </>
+    (*name
+    </>*)
     let* (range, s) = located identifier in 
     match s with
     | "Prop" ->
@@ -194,7 +196,7 @@ and compound_term (tag: string): (range -> term) t =
         arrow ()
 
     | "pi" ->
-        assert false
+        pi ()
 
     | _ ->
         assert false (* Error case *)
@@ -207,8 +209,54 @@ and any (): (range -> term) t =
 
 
 and arrow (): (range -> term) t =
-    let* n, lst, res = one_or_more_rev (term () |> ws_before) in
+    let* n, lst, res = one_or_more_rev (term ()) in
     Elab.arrow lst n res |> return
+
+
+and pi (): (range -> term) t =
+    (*
+        ((%a: A) #(%b B) %c #%d ... ) R
+     *)
+    let* _, args, arg =
+        one_or_more_rev (formal_argument ()) |> parens
+    in
+    let* rty  =
+        term () |> ws_before
+    in
+    Elab.pi args arg rty |> return
+
+
+
+and formal_argument (): (bool * Name.t located * term option) t =
+    (*
+            %x                  untyped
+            (%x ty)             typed
+            #%x                 implicit untyped
+            #(%x ty)            implicit typed
+    *)
+    let* hash =
+        char '#' |> ws_after |> optional
+    in
+    let* n, ty =
+        (
+            parens
+                (
+                    let* n = located name |> ws_after in
+                    let* ty = (term ()) |> optional in
+                    return (n, ty)
+                )
+            </>
+            map
+                (fun n -> n, None)
+                (located name)
+        )
+    in
+    return (hash <> None, n, ty)
+
+
+
+
+
 
 
 
@@ -220,7 +268,7 @@ and arrow (): (range -> term) t =
 
 
 let final_term: Elab.Final.t t =
-    let* t = term () in
+    let* t = term () |> ws_around in
     let* state = get in
     let  res, state =  Elab.make_term t state in
     let* _  = set state in

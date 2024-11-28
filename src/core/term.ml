@@ -5,10 +5,8 @@ and t0 =
    | Sort of Sort.t
    | Meta of int
    | Pi of
-         int                            (* Number of actual fargs, only the tail
-                                           of fargs is actually used *)
+         int                            (* Start of arguments *) 
          * (Info.Bind.t * t * t) array  (* (bind, ty, s): s is always a sort *)
-
          * (t * t)                      (* Result type and its sort *)
 
 
@@ -44,19 +42,39 @@ let pi_sort (t1: t) (t2: t): t =
 
 
 
+let pi1
+        ((_, (na, _), _) as a: (Info.Bind.t * t * t))
+        (((nr, r0), _)   as r: t * t)
+    : t
+    =
+    min na nr
+    ,
+    match r0 with
+    | Pi (start, args, rtp) ->
+        assert (start = 0);
+        Pi (
+            start,
+            Fmlib_std.Array.insert 0 a args,
+            rtp
+        )
+    | _ ->
+        Pi (0, [|a|], r)
+
+
+
+
 let pi
         (args: (Info.Bind.t * t * t) array)
         (((nres, _), _) as res: t * t)
     : t
     =
-    let nargs  = Array.length args in
     let n =
         Array.fold_left
             (fun n (_, (narg, _), _) -> min narg n)
             nres
             args
     in
-    n, Pi (nargs, args, res)
+    n, Pi (0, args, res)
 
 
 (*  Note [Pi Lifted]

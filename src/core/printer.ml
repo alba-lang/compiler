@@ -9,9 +9,18 @@ struct
 
     let indent = nest 4
 
+    let parens_generic (left: doc) (inner: doc) (right: doc): doc =
+        left <+> cut <+> indent inner <+> cut <+> right
+        |> group
+
     let parens (d: doc): doc =
-        group (char '(' <+> cut <+> indent d <+> cut <+> char ')')
+        parens_generic (char '(') d (char ')')
+
+    let braced (d: doc): doc =
+        parens_generic (char '{') d (char '}')
 end
+
+
 
 
 type doc = Pretty.doc
@@ -83,28 +92,103 @@ struct
         | _, Meta i ->
             sprintf "?%d" i |> text, Prec.highest
 
-        | _, Pi (nargs, args, res) ->
-            pi full nargs args res
+        | _, Pi (start, args, res) ->
+            pi full start args res
 
 
 
-    and pi full nargs args ((res, _) as r) =
+    and doc full t: doc =
+        edoc full t |> fst
+
+
+
+    and pi full start args ((res, _) as r): edoc =
         let len = Array.length args in
-        assert (0 <= nargs);
-        assert (nargs <= len);
-        if nargs = 0 then
+        assert (0 <= start);
+        assert (start <= len);
+        if start = len then
             edoc full res
         else
-            let (b, ty, _) = args.(len - nargs)
+            let (b, ty, _) = args.(start)
             in
             if Info.Bind.is_arrow b then
                 binop
                     (edoc full ty)
                     Prec.arrow "->"
-                    (pi full (nargs - 1) args r),
+                    (pi full (start + 1) args r),
                 Prec.arrow
             else
-                assert false
+                let start, arg_docs =
+                    pi_fargs full b ty (start + 1) args
+                in
+                let rdoc, _ =
+                    pi full start args r
+                in
+                group (
+                    text "all"
+                    <+> space
+                    <+> (arg_docs |> stack_or_pack " " |> indent)
+                    <+> cut
+                    <+> text ": "
+                    <+> rdoc
+                ),
+                Prec.colon
+
+
+
+    and pi_fargs full b ty start args: int * doc list =
+        let len = Array.length args
+        in
+        let rec aux docs start =
+            if start = len then
+                start, List.rev docs
+
+            else
+                let b, ty, _ = args.(start) in
+                if Info.Bind.is_arrow b then
+                    start, List.rev docs
+
+                else
+                    aux (formal_argument full b ty :: docs) (start + 1)
+        in
+        aux [formal_argument full b ty] start
+
+
+
+    and formal_argument full b ty: doc =
+        assert (not (Info.Bind.is_arrow b));
+        let with_type = full || Info.Bind.with_type b
+        and implicit = Info.Bind.is_implicit b
+        and name =
+            let nm  = Info.Bind.name b in
+            let str = Name.string nm
+            in
+            if Name.is_operator nm then
+                sprintf "(%s)" str |> text
+            else
+                text str
+        in
+        let fwty ty =
+            name
+            <+> char ':'
+            <+> space
+            <+> indent (doc full ty)
+        in
+        match with_type, implicit with
+        | true, true ->
+            fwty ty |> braced
+
+        | true, false ->
+            fwty ty |> parens
+
+        | false, true ->
+            braced name
+
+        | false, false ->
+            name
+
+
+
 
 
 

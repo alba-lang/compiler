@@ -6,6 +6,11 @@ module type ANY = Fmlib_std.Interfaces.ANY
 type range =
     Fmlib_parse.Position.range
 
+type 'a located =
+    range * 'a
+
+
+
 type term
 type gamma
 type globals
@@ -49,6 +54,7 @@ sig
 end
 
 
+type formal_argument = bool * Name.t located * Ast.term option
 
 
 
@@ -57,6 +63,9 @@ val prop: range -> Ast.term
 val any:  int -> range -> Ast.term
 
 val arrow: Ast.term list -> int  -> Ast.term -> range ->  Ast.term
+
+
+val pi: formal_argument list -> formal_argument -> Ast.term -> range -> Ast.term
 
 
 

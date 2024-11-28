@@ -33,23 +33,33 @@ let add (tick: tick) (task: task) (message: message) (tr: t): t =
         tr
 
 
+let count (t: t): int =
+    List.length t.messages
+
+
+
 let doc (t: t): Fmlib_pretty.Print.doc =
     let open Fmlib_pretty.Print
     in
     let entry (tick, task, doc) =
         let open Printf
         in
+        let level = List.length task in
         let hdr =
-            sprintf "%d [%s]:"
-                tick
-                (String.concat
-                     ","
-                     (List.rev_map (sprintf "%d") task))
+            if level = 0 then
+                sprintf "%d" tick
+            else
+                sprintf "%d %s:"
+                    tick
+                    (String.concat
+                         "."
+                         (List.rev_map (sprintf "%d") task))
         in
         group (
             text hdr
-            <+> break "           "
-            <+> nest 4 (doc ()))
+            <+> space
+            <+> nest 4 (doc ())
+        ) |> nest (2 * level)
         <+> cut
     in
     cat (List.rev_map entry t.messages)

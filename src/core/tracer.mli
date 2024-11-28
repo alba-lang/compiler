@@ -7,4 +7,6 @@ val empty: t
 
 val ignore: t
 
+val count: t -> int
+
 val doc: t -> Print.doc
