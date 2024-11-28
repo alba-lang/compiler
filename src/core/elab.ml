@@ -293,7 +293,10 @@ end
 
 module Ast =
 struct
-    type term = gamma -> int -> unit GE.t
+    type term = (gamma -> int -> unit GE.t) located
+
+    let range t =
+        fst t
 end
 
 
@@ -542,7 +545,7 @@ let elab_term (ast: Ast.term) (g: gamma) (id: int): int t   (* task id *)
     let* _ =
         trace_doc Pretty.(sprintf "Elab term ?%d" id |> text)
     in
-    spawn (ast g id)
+    spawn ((snd ast) g id)
 
 
 
@@ -559,7 +562,9 @@ let elab_term_wait (ast: Ast.term) (g: gamma) (id: int): term t =
 *)
 
 
-let prop (_: range): Ast.term =
+let prop (range: range): Ast.term =
+    range
+    ,
     fun g id ->
     let* _ = trace (fun _ -> Pretty.text "Make Prop")
     in
@@ -567,25 +572,13 @@ let prop (_: range): Ast.term =
 
 
 
-let any (level: int) (_: range): Ast.term =
+let any (level: int) (range: range): Ast.term =
+    range
+    ,
     fun g id ->
     let* _ = trace (fun _ -> Pretty.text (sprintf "Make (Any %d)" level))
     in
     fill_ehole id (Gamma.any level g)
-
-
-
-(*
-let trace_fargs (s: string) (args: 'a list): unit t =
-    trace
-        (fun _ ->
-             Pretty.text
-                 (sprintf
-                      "Make %s with %d arguments"
-                      s
-                      (List.length args))
-        )
-*)
 
 
 
@@ -594,8 +587,11 @@ let pi1
         (_: range) (* of name *)
         (ty: Ast.term option)
         (rtp: Ast.term)
+        (range: range)
     : Ast.term
     =
+    range
+    ,
     fun g0 par_id ->
     let* _ = trace (fun _ -> Pretty.text "Make pi")
     in
@@ -622,62 +618,28 @@ let pi1
 let arrow
         (args: Ast.term list)
         (_: int)
-        (res: Ast.term)
+        ((rrange, _ as res): Ast.term)
         (_: range)
     : Ast.term
-    (* A -> B -> ... -> R
+    (*  A -> B -> ... -> R
 
-       is equivalent to
+        is equivalent to
 
         all (_: A) (_: B) ... : R
     *)
     =
-    let args =
-        args
-        |> List.rev_map
-            (fun ty ->
-                 (Position.start, Position.start), (* !!! MISSING !!!! *)
-                 Info.Bind.arrow,
-                 Some ty
-            )
-    in
     let rec aux: _ list -> Ast.term = function
         | [] ->
             res
-        | (range, b, ty) :: args ->
-            pi1 b range ty (aux args)
+        | (tyrange, _ as ty) :: args ->
+            pi1
+                Info.Bind.arrow
+                tyrange
+                (Some ty)
+                (aux args)
+                (Position.merge tyrange rrange)
     in
-    aux args
-
-(*
-    =
-    fun g0 root ->
-        let args =
-            List.rev args
-        in
-        let* _ = trace_fargs "arrow" args
-        in
-        let* g =
-            ListM.fold_left
-                (fun arg g ->
-                     let* h_id = create_hole (Hole.e_type (Some root) g0) in
-                     let* tp   = elab_term_wait arg g h_id in
-                     let* tp   = zonk tp in (* ??? *)
-                     let  g    =
-                         Gamma.push_variable
-                             Info.Bind.arrow false tp g
-                     in
-                     return g
-                )
-                args
-                g0
-        in
-        let* h_id  = create_hole (Hole.e_type (Some root) g0) in
-        let* res   = elab_term_wait res g h_id in
-        let* res   = zonk res in        (* ??? *)
-        fill_ehole root (Gamma.make_pi res g g0)
-*)
-
+    aux (List.rev args)
 
 
 
@@ -685,13 +647,14 @@ let arrow
 let pi
         (args: formal_argument list)
         (arg: formal_argument)
-        (rtp: Ast.term)
+        ((rrange, _ as rtp): Ast.term)
         (_: range)
     : Ast.term
     (*
         all (_: A) (_: B) ... : R
     *)
     =
+    (* Rework of ranges needed !!!!!! *)
     let args =
         arg :: args
         |> List.rev_map
@@ -705,10 +668,15 @@ let pi
             assert false (* cannot happen *)
 
         | [range, b, ty] ->
-            pi1 b range ty rtp
+            pi1 b range ty rtp (Position.merge range rrange)
 
         | (range, b, ty) :: args ->
-            pi1 b range ty (pi_aux args)
+            pi1
+                b
+                range
+                ty
+                (pi_aux args)
+                (Position.merge range rrange)
     in
     pi_aux args
 

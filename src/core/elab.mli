@@ -51,6 +51,7 @@ end
 module Ast:
 sig
     type term
+    val range: term -> range
 end
 
 
