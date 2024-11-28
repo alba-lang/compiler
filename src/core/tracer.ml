@@ -47,9 +47,9 @@ let doc (t: t): Fmlib_pretty.Print.doc =
         let level = List.length task in
         let hdr =
             if level = 0 then
-                sprintf "%d" tick
+                sprintf "@%d" tick
             else
-                sprintf "%d %s:"
+                sprintf "@%d %s:"
                     tick
                     (String.concat
                          "."

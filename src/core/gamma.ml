@@ -199,12 +199,6 @@ let push_variable
 let make_pi1 (b: Info.Bind.t) (tp: term) (rtp: term): term =
     let g0 = gamma_of_term tp
     and g  = gamma_of_term rtp in
-    Printf.printf
-        "Gamma.make_pi1 g0 %d, g %d,  tp %s, rtp %s\n"
-        (length g0)
-        (length g)
-        (string_of_term tp)
-        (string_of_term rtp);
     assert (g0 == previous g);
     let s1 = term_of_term (type_of_term tp)
     and s2 = term_of_term (type_of_term rtp)

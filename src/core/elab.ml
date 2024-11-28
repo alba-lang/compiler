@@ -7,8 +7,9 @@ module type ANY = Fmlib_std.Interfaces.ANY
 
 module Pretty = Fmlib_pretty.Print
 
+module Position = Fmlib_parse.Position
 
-type range = Fmlib_parse.Position.range
+type range = Position.range
 
 type 'a located = range * 'a
 
@@ -562,7 +563,6 @@ let prop (_: range): Ast.term =
     fun g id ->
     let* _ = trace (fun _ -> Pretty.text "Make Prop")
     in
-    printf "prop in gamma len %d\n" (Gamma.length g);
     fill_ehole id (Gamma.prop g)
 
 
@@ -571,12 +571,11 @@ let any (level: int) (_: range): Ast.term =
     fun g id ->
     let* _ = trace (fun _ -> Pretty.text (sprintf "Make (Any %d)" level))
     in
-    printf "any %d in gamma len %d\n" level (Gamma.length g);
     fill_ehole id (Gamma.any level g)
 
 
 
-
+(*
 let trace_fargs (s: string) (args: 'a list): unit t =
     trace
         (fun _ ->
@@ -586,6 +585,38 @@ let trace_fargs (s: string) (args: 'a list): unit t =
                       s
                       (List.length args))
         )
+*)
+
+
+
+let pi1
+        (b: Info.Bind.t)
+        (_: range) (* of name *)
+        (ty: Ast.term option)
+        (rtp: Ast.term)
+    : Ast.term
+    =
+    fun g0 par_id ->
+    let* _ = trace (fun _ -> Pretty.text "Make pi")
+    in
+    let* hty =
+        match ty with
+        | None ->
+            create_hole (Hole.c_type g0)
+
+        | Some ty ->
+            let* hty = create_hole (Hole.e_type (Some par_id) g0) in
+            let* _   = elab_term ty g0 hty in
+            return hty
+    in
+    let* tp   = meta hty in
+    let  g    = Gamma.push_variable b true tp g0 in
+    let* hrtp = create_hole (Hole.e_type (Some par_id) g) in
+    let* rtp  = elab_term_wait rtp g hrtp in
+    let* tp   = wait_hole hty in
+    fill_ehole par_id (Gamma.make_pi1 b tp rtp)
+
+
 
 
 let arrow
@@ -600,6 +631,25 @@ let arrow
 
         all (_: A) (_: B) ... : R
     *)
+    =
+    let args =
+        args
+        |> List.rev_map
+            (fun ty ->
+                 (Position.start, Position.start), (* !!! MISSING !!!! *)
+                 Info.Bind.arrow,
+                 Some ty
+            )
+    in
+    let rec aux: _ list -> Ast.term = function
+        | [] ->
+            res
+        | (range, b, ty) :: args ->
+            pi1 b range ty (aux args)
+    in
+    aux args
+
+(*
     =
     fun g0 root ->
         let args =
@@ -626,39 +676,7 @@ let arrow
         let* res   = elab_term_wait res g h_id in
         let* res   = zonk res in        (* ??? *)
         fill_ehole root (Gamma.make_pi res g g0)
-
-
-
-
-let pi1
-        (b: Info.Bind.t)
-        (_: range) (* of name *)
-        (ty: Ast.term option)
-        (rtp: Ast.term)
-    : Ast.term
-    =
-    fun g0 par_id ->
-    let* _ = trace (fun _ -> Pretty.text "Make pi")
-    in
-    let* hty =
-        match ty with
-        | None ->
-            create_hole (Hole.c_type g0)
-
-        | Some ty ->
-            let* hty = create_hole (Hole.e_type (Some par_id) g0) in
-            let* _   = elab_term ty g0 hty in
-            return hty
-    in
-    let* tp   = meta hty in
-    let  g    = Gamma.push_variable b true tp g0 in
-    printf "pi1: g0 %d, g %d\n"
-        (Gamma.length g0)
-        (Gamma.length g);
-    let* hrtp = create_hole (Hole.e_type (Some par_id) g) in
-    let* rtp  = elab_term_wait rtp g hrtp in
-    let* tp   = wait_hole hty in
-    fill_ehole par_id (Gamma.make_pi1 b tp rtp)
+*)
 
 
 

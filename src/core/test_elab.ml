@@ -12,7 +12,6 @@ let success_term_tests
     : success_term_test list
     =
     [
-        (*
         false, false,
         "Prop"
         ;
@@ -22,8 +21,7 @@ let success_term_tests
         false, false,
         "(ar (Any 1 ) Prop (Any 0))"
         ;
-           *)
-        true, true,
+        false, false,
         "(pi ((%x (Any 1)) (%y (Any 0))) Prop)"
         ;
     ]
@@ -47,9 +45,6 @@ let execute_success_term_test
     let p = term_parser state in
     let p = run_on_string src p
     in
-    Printf.printf
-        "%d tracer messages\n"
-        (Tracer.count (Elab.State.tracer (Parser.state p)));
     let module Reporter =
         Error_reporter.Make (Parser)
     in
