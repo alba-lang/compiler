@@ -50,11 +50,13 @@ let type_of_term: term -> term = function
         tp
 
 
+let update_type (t: term) (ty: term): term =
+    match t with
+    | Typed (g, raw, _) ->
+        Typed (g, raw, ty)
+    | _ ->
+        t
 
-
-let string_of_term (t: term): string =
-    Printer.Term.base_string true true (term_of_term t)
-let _ = string_of_term
 
 
 let make_sort (s: Term.t) (g: t): term =
@@ -64,6 +66,13 @@ let make_sort (s: Term.t) (g: t): term =
 
     | _ ->
         assert false (* nyi: Polymorphic Any *)
+
+
+
+
+let string_of_term (t: term): string =
+    Printer.Term.base_string true true (term_of_term t)
+let _ = string_of_term
 
 
 
@@ -258,5 +267,5 @@ let prop (g: t): term =
     Free (g, Sort.Prop)
 
 
-let meta (id: int) (tp: term) (g: t): term =
-    Typed (g, Term.meta id, tp)
+let meta (id: int) (tp: term): term =
+    Typed (gamma_of_term tp, Term.meta id, tp)

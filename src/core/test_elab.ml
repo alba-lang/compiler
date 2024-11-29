@@ -67,7 +67,7 @@ let execute_success_term_test
                     |> run_on_string src
                 )
             )
-            |> Pretty.layout 70
+            |> Pretty.layout 80
             |> Pretty.write_to_channel stdout;
             false
         end
@@ -87,7 +87,7 @@ let execute_success_term_test
                      doc_with_tracer (doc <+> cut)
                  in
                  doc
-                 |> Pretty.layout 50
+                 |> Pretty.layout 80
                  |> Pretty.write_to_channel stdout
 
              | _ ->

@@ -97,58 +97,53 @@ end
 module Hole =
 struct
     type info =
-        | Elab of
-              int option (* parent hole *)
+        | Elab
         | Constraint
+
     type t = {
+        parent: int option; (* parent hole *)
+        reason: string;
         info: info;
-        gamma: gamma;
         args: (term * bool) array;
         res_tp: term;
     }
 
-    let e_type (parent: int option) (gamma: gamma): t =
+    let e_type (parent: int option) (reason: string) (gamma: gamma): t =
         (* Create a type hole for an elaborated type (i.e. present in the source
            code). *)
         {
-            info = Elab parent;
-            gamma;
+            parent;
+            reason;
+            info = Elab;
             args = [||];
             res_tp = Gamma.top 0 gamma;
         }
 
 
-    let e_term (parent: int option) (res_tp: term) (gamma: gamma): t =
+    let e_term (parent: int option) (reason: string) (res_tp: term): t =
         {
-            info = Elab parent;
-            gamma;
+            parent;
+            reason;
+            info = Elab;
             args = [||];
             res_tp
         }
 
 
-    let c_type gamma =
+    let c_type (parent: int option) (reason: string) gamma =
         {
+            parent;
+            reason;
             info = Constraint;
-            gamma;
             args = [||];
             res_tp = Gamma.top 0 gamma;
         }
 
 
-
-    let gamma (h: t): gamma =
-        h.gamma
-
-
     let is_unifiable (h: t): bool =
         match h.info with
-        | Elab _ -> false
-        | _      -> true
-
-
-    let type_of (h: t): term =
-        h.res_tp
+        | Elab        -> false
+        | Constraint  -> true
 
 
     let doc (h: t) (): Pretty.doc =
@@ -164,7 +159,10 @@ struct
             else
                 space <+> char '(' <+> inner <+> char ')'
         in
-        text (if is_unifiable h then "c-hole" else "e-hole")
+        text
+            (sprintf "%s for %s"
+                 (if is_unifiable h then "c-hole" else "e-hole")
+                 h.reason)
         <+> cat (List.map arg (Array.to_list h.args))
         <+> char ':' <+> space
         <+> doc_of_term h.res_tp ()
@@ -221,7 +219,7 @@ struct
         let* id = create_hole h in
         let* _  = trace
             (fun () ->
-                text (sprintf "?%d" id)
+                text (sprintf "Create ?%d" id)
                 <+> space
                 <+> Hole.doc h ())
         in
@@ -233,7 +231,7 @@ struct
         let* _ =
             trace
                 (fun _ ->
-                     text (sprintf "?%d :=" id)
+                     text (sprintf "Fill ?%d :=" id)
                      <+> space
                      <+> doc_of_term t ()
                 )
@@ -253,7 +251,7 @@ struct
 
     let meta (id: int): term t =
         let* h = get_hole id in
-        Gamma.meta id h.res_tp h.gamma |> return
+        Gamma.meta id h.res_tp |> return
 end
 
 
@@ -291,16 +289,252 @@ end
 
 
 
-module Ast =
-struct
-    type term = (gamma -> int -> unit GE.t) located
 
-    let range t =
-        fst t
+
+
+
+
+
+
+
+
+(*
+    Unification
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+*)
+
+
+
+
+let rec head_normal (t: term): term t =
+    match
+        term_of_term t |> snd
+    with
+    | Sort _ ->
+
+        return t
+
+    | Meta id ->
+
+        begin
+            let* v = value_opt id in
+            match v with
+            | None ->
+                return t
+            | Some t ->
+                head_normal t
+        end
+
+    | Pi _  ->
+
+        return t
+
+
+
+
+
+
+
+
+
+module Unify =
+struct
+    type quad = {
+        parent: int option; (* The ehole of the parent term which requires the
+                               unification *)
+        hole: int;          (* The hole which has to filled with the unified
+                               term [act]. *)
+        act: term;
+        req: term;
+        acthn: term;
+        reqhn: term;
+    }
+
+    type data = {
+        quad:  quad;
+        stack: quad list;
+    }
+
+    let make_quad (parent: int option) (act: term) (req: term): quad t =
+        let* acthn = head_normal act in
+        let* reqhn = head_normal req in
+        let* hole  =
+            create_hole
+                (Hole.e_term
+                     parent
+                     "unified actual"
+                     (type_of_term act))
+        in
+        { parent; hole; act; req; acthn; reqhn }
+        |> return
+
+
+
+    let make_data (parent: int option) (act: term) (req: term): data t =
+        let* quad = make_quad parent act req
+        in
+        { quad; stack = [] }
+        |> return
+
+
+    let make_next_data (act: term) (req: term) data : data t =
+        let* quad = make_quad data.quad.parent act req in
+        { quad; stack = quad :: data.stack }
+        |> return
+
+
+
+    let rec uni data: unit t =
+        let quad =
+            data.quad
+        in
+        let* _ =
+            trace (fun () ->
+                let open Pretty in
+                text "Unify" <+> space
+                <+> doc_of_term quad.act ()
+                <+> space <+> text "with" <+> space
+                <+> doc_of_term quad.req ()
+            )
+        in
+
+        match
+            term_of_term quad.acthn |> snd,
+            term_of_term quad.reqhn |> snd
+        with
+
+        | Sort s_act, Sort s_req ->
+
+            if Sort.unify false s_act s_req (* boolean flag makes no sense!!!! *)
+            then
+                fill_hole quad.hole quad.acthn
+            else
+                assert false
+
+        | Meta _, Meta _ ->
+
+            assert false
+
+        | Meta id, _ ->
+
+            flex_rigid
+                id
+                quad.acthn
+                quad.reqhn
+                data
+
+        | _,      Meta id ->
+
+            flex_rigid
+                id
+                quad.reqhn
+                quad.acthn
+                data
+
+        | Pi _,  Pi _ ->
+
+            assert false
+
+        | Pi _,  _ ->
+
+            assert false
+
+        | _,  Pi _ ->
+
+            assert false
+
+
+
+    and flex_rigid
+            (meta_id: int)
+            (flex: term)
+            (rigid: term)
+            data
+        : unit t
+        =
+        let* hole = get_hole meta_id
+        in
+        if Hole.is_unifiable hole then
+            let* _ =
+                (* Make sure that the type of the rigid term
+                   satisfies the requirement of the
+                   flex term. *)
+                let* data_next =
+                    make_next_data
+                        (type_of_term rigid)
+                        (type_of_term flex)
+                        data
+                in
+                uni_wait data_next
+            in
+            let* _ = fill_flex_with_rigid meta_id rigid in
+            let* data_next =
+                     make_next_data
+                         data.quad.acthn
+                         data.quad.reqhn
+                         data
+            in
+            uni_wait_fill
+                data.quad.hole
+                data_next
+        else
+            let* _ = wait_hole meta_id in
+            let* data_next =
+                     make_next_data
+                         data.quad.acthn
+                         data.quad.reqhn
+                         data
+            in
+            uni_wait_fill
+                data.quad.hole
+                data_next
+
+
+
+    and fill_flex_with_rigid (id: int) (t: term): unit t =
+        match term_of_term t |> snd with
+
+        | Sort _ ->
+
+            fill_hole id t
+
+        | Meta _ ->
+
+            assert false (* Illegal call *)
+
+        | Pi _ ->
+
+            assert false (* nyi *)
+
+
+
+    and uni_wait (data: data): term t =
+        (* Spawn a task to make the unification with [data] and wait for unified
+           actual term. *)
+        let* _ = spawn (uni data) in
+        wait_hole data.quad.hole
+
+
+
+    and uni_wait_fill (id: int) (data: data): unit t =
+        (* Spawn a task to make the unification with [data], wait for unified
+           actual term and fill the term into the hole [id]. *)
+        let* t = uni_wait data in
+        fill_hole id t
+
+
+
+
+
+    let unify (parent: int option) (act: term) (req: term): term t =
+        (* Unify [act] with [req] and return the unified normal form of [act].
+         *)
+        let* data = make_data parent act req in
+        uni_wait data
 end
 
 
-type formal_argument = bool * Name.t located * Ast.term option
+
 
 
 
@@ -312,111 +546,9 @@ type formal_argument = bool * Name.t located * Ast.term option
 
 
 (*
-    Internal Functions
+    Helper Functions
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 *)
-
-
-
-
-
-
-let rec head_normal (t: term): term t =
-    match
-        term_of_term t
-    with
-    | _, Sort _ ->
-
-        return t
-
-    | _, Meta id ->
-
-        begin
-            let* v = value_opt id in
-            match v with
-            | None ->
-                return t
-            | Some t ->
-                head_normal t
-        end
-
-    | _, Pi _  ->
-
-        return t
-
-
-
-
-let rec unify (eq: bool) (act: term) (req: term): bool t =
-    let* _ =
-        trace (fun () ->
-            let open Pretty in
-            text "Unify" <+> space
-            <+> doc_of_term act ()
-            <+> space <+> text "with" <+> space
-            <+> doc_of_term req ()
-        )
-    in
-    let* act_hn = head_normal act in
-    let* req_hn = head_normal req in
-    match
-        term_of_term act_hn,
-        term_of_term req_hn
-    with
-    | (_, Sort s_act), (_, Sort s_req) ->
-
-        return (Sort.unify eq s_act s_req)
-
-    | (_, Meta _), (_, Meta _) ->
-
-        assert false
-
-    | (_, Meta id), _ ->
-
-        flex_rigid eq true id req_hn
-
-    | _,      (_, Meta id) ->
-
-        flex_rigid eq false id act_hn
-
-    | (_, Pi _),  (_, Pi _) ->
-
-        assert false
-
-    | (_, Pi _),  _ ->
-
-        assert false
-
-    | _,  (_, Pi _) ->
-
-        assert false
-
-
-
-and flex_rigid (eq: bool) (sub: bool) (id: int) (t: term): bool t =
-    (* See Note [Flex Rigid Simple] *)
-    let* h   = get_hole id in
-    let  gm  = Hole.gamma h
-    and  gt  = gamma_of_term t
-    in
-    if Hole.is_unifiable h && Gamma.is_prefix gt gm then
-        let* ok =
-            unify false (type_of_term t) (Hole.type_of h)
-        in
-        if ok then
-            let* _ = fill_hole id t in
-            return ok
-        else
-            assert false
-    else
-        let* v = wait_hole id in
-        if eq then
-            unify eq v t
-        else if sub then
-            unify false v t
-        else
-            unify false t v
-
 
 
 let fill_ehole (id: int) (t: term): unit t =
@@ -424,53 +556,10 @@ let fill_ehole (id: int) (t: term): unit t =
     let  tp_act = Gamma.type_of_term t in
     let* h      = get_hole id in
     let  tp_req = h.res_tp in
-    let* _      = unify false tp_act tp_req in
-    fill_hole id t
+    let* tp_act = Unify.unify None tp_act tp_req in
+    fill_hole id (Gamma.update_type t tp_act)
 
 
-
-
-
-let rec zonk_raw: Term.t -> Term.t t = function
-
-    | _, Sort _  as t ->
-
-        return t
-
-    | _, Meta id ->
-
-        map term_of_term (wait_hole id) >>= zonk_raw
-
-    | _, Pi (n, args, (r, s)) ->
-        assert (n = 0);
-        let args = Array.copy args in
-        let* _ =
-            IntM.iter
-                (Array.length args)
-                (fun i ->
-                     let (b, ty, s) = args.(i) in
-                     let* ty = zonk_raw ty in
-                     let* s  = zonk_raw s in
-                     args.(i) <-  (b, ty, s);
-                     return ()
-                )
-        in
-        let* r = zonk_raw r in
-        let* s = zonk_raw s in
-        return Term.(pi args (r, s))
-
-
-
-let rec zonk:  term -> term t = function
-    | Free _ as t ->
-
-        return t
-
-    | Typed (g, t_raw, tp) ->
-
-        let* t_raw = zonk_raw t_raw in
-        let* tp    = zonk tp in
-        return (Gamma.Typed (g, t_raw, tp))
 
 
 
@@ -539,6 +628,39 @@ let run_ge (m: Final.t GE.t) (state: State.t)
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+(*
+    Elaboration
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+*)
+
+
+
+module Ast =
+struct
+    type term = (gamma -> int -> unit GE.t) located
+
+    let range t =
+        fst t
+end
+
+
+type formal_argument = bool * Name.t located * Ast.term option
+
+
+
+
+
 let elab_term (ast: Ast.term) (g: gamma) (id: int): int t   (* task id *)
     =
     (* Elaborate the term in a parallel task. *)
@@ -556,17 +678,15 @@ let elab_term_wait (ast: Ast.term) (g: gamma) (id: int): term t =
 
 
 
-(*
-    External Functions
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-*)
+
+
 
 
 let prop (range: range): Ast.term =
     range
     ,
     fun g id ->
-    let* _ = trace (fun _ -> Pretty.text "Make Prop")
+    let* _ = trace (fun _ -> Pretty.text ">>> Make Prop <<<")
     in
     fill_ehole id (Gamma.prop g)
 
@@ -576,7 +696,7 @@ let any (level: int) (range: range): Ast.term =
     range
     ,
     fun g id ->
-    let* _ = trace (fun _ -> Pretty.text (sprintf "Make (Any %d)" level))
+    let* _ = trace (fun _ -> Pretty.text (sprintf ">>> Make (Any %d) <<<" level))
     in
     fill_ehole id (Gamma.any level g)
 
@@ -593,21 +713,27 @@ let pi1
     range
     ,
     fun g0 par_id ->
-    let* _ = trace (fun _ -> Pretty.text "Make pi")
+    let* _ = trace (fun _ -> Pretty.text ">>> Make pi <<<")
     in
     let* hty =
         match ty with
         | None ->
-            create_hole (Hole.c_type g0)
+            create_hole (Hole.c_type (Some par_id) "pi unknown argument type" g0)
 
         | Some ty ->
-            let* hty = create_hole (Hole.e_type (Some par_id) g0) in
+            let* hty =
+                create_hole
+                    (Hole.e_type (Some par_id) "pi argument type" g0)
+            in
             let* _   = elab_term ty g0 hty in
             return hty
     in
     let* tp   = meta hty in
     let  g    = Gamma.push_variable b true tp g0 in
-    let* hrtp = create_hole (Hole.e_type (Some par_id) g) in
+    let* hrtp =
+        create_hole
+            (Hole.e_type (Some par_id) "pi result type" g)
+    in
     let* rtp  = elab_term_wait rtp g hrtp in
     let* tp   = wait_hole hty in
     fill_ehole par_id (Gamma.make_pi1 b tp rtp)
@@ -695,78 +821,21 @@ let make_term (t_ast: Ast.term) (state: State.t)
             in
             let* _  =
                 trace
-                    (fun _ -> Pretty.(wrap_words "Make top level term"))
+                    (fun _ ->
+                         Pretty.(text ">>> Make top level term <<<"))
             in
             let* id =
-                let* tp_id = create_hole (Hole.c_type g) in
+                let* tp_id =
+                    create_hole
+                        (Hole.c_type None "top level term type" g)
+                in
                 let* tp = meta tp_id in
-                create_hole (Hole.e_term None tp g)
+                create_hole
+                    (Hole.e_term None "top level term" tp)
             in
             let* _  = elab_term t_ast g id in
             let* t  = wait_hole id in
-            let* t  = zonk t in        (* all metas must be zonked *)
+            (*let* t  = zonk t in        (* all metas must be zonked *)*)
             return (Final.Term t)
         )
         state
-
-
-
-
-(*
-    Note [Fill Hole]
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-    Before filling a hole with a term, it has to be checked if the term
-    satisfies the requirement.
-
-    The hole contains its requirement:
-
-        - type of the arguments (explicit or implicit)
-        - type of the result after applying the arguments
-
-    Steps:
-
-        - If there are arguments, then the type of the term must be a function
-        type. The type of the actual arguments have to conform to the formal
-        argument types and the term has to be applied to the actual arguments.
-
-        - If the elaborated term is a function type beginning with implicit
-        arguments, then it has to be checked if the result type needs implicit
-        arguments as well. I.e. how many implicit arguments have to be created
-        and feeded as arguments?
-
-        - The term applied to all arguments has to conform to the result type.
-*)
-
-
-
-
-(*
-    Note [Flex Rigid Simple
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-    We have to unify
-
-        ?m ~ t      (or ?m <= t or t <= ?m)
-
-    where ?m has not yet been instantiated.
-
-    Filling of the hole is possible only if:
-
-    - ?m is a unifiable variable
-
-    - t is valid in the context of ?m or below
-
-    - T <= M  where t: T and ?m: M
-
-    If ?m is an elaboration variable or it has been defined in a higher context,
-    then we have to wait for ?m and then
-
-        unify true  v t        (if ?m ~ t)
-
-        unify false v t        (if ?m <= t)
-
-        unify false t v        (if t <= ?m)
-
-    where v is the instantiation of ?m
-*)

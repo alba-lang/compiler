@@ -15,6 +15,9 @@ val term_of_term:  term -> Term.t
 val type_of_term:  term -> term
 
 
+val update_type: term -> term -> term
+
+
 
 
 module Entry:
@@ -75,4 +78,4 @@ val any:  int -> t -> term
 val top:  int -> t -> term
 val prop: t -> term
 
-val meta: int -> term -> t -> term (* id, type, gamma *)
+val meta: int -> term -> term (* id, type, gamma *)
