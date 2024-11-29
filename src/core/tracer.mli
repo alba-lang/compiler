@@ -10,3 +10,5 @@ val ignore: t
 val count: t -> int
 
 val doc: t -> Print.doc
+
+val doc_sorted: t -> Print.doc

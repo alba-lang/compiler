@@ -5,7 +5,39 @@ open Std
 module type ANY = Fmlib_std.Interfaces.ANY
 
 
-module Pretty = Fmlib_pretty.Print
+
+
+
+module Pretty =
+struct
+    include Fmlib_pretty.Print
+
+    let indent (d: doc): doc =
+        nest 4 d
+
+
+
+    let description (d1: doc) (d2: doc): doc =
+        d1 <+> space <+> indent d2 |> group
+
+
+
+    let descriptions (ds: (doc * doc) list): doc =
+        List.map
+            (fun (d1, d2) ->
+                 d1
+                 <+> space
+                 <+> (indent d2)
+                 |> group
+            )
+            ds
+      |> separated_by space
+      |> group
+end
+
+
+
+
 
 module Position = Fmlib_parse.Position
 
@@ -164,8 +196,10 @@ struct
                  (if is_unifiable h then "c-hole" else "e-hole")
                  h.reason)
         <+> cat (List.map arg (Array.to_list h.args))
-        <+> char ':' <+> space
-        <+> doc_of_term h.res_tp ()
+        <+> char ':'
+        <+> space
+        <+> (doc_of_term h.res_tp () |> nest 2)
+        |> group
 end
 
 
@@ -219,9 +253,10 @@ struct
         let* id = create_hole h in
         let* _  = trace
             (fun () ->
-                text (sprintf "Create ?%d" id)
-                <+> space
-                <+> Hole.doc h ())
+                description
+                    (sprintf "Create ?%d" id |> text)
+                    (Hole.doc h ())
+            )
         in
         return id
 
@@ -231,9 +266,9 @@ struct
         let* _ =
             trace
                 (fun _ ->
-                     text (sprintf "Fill ?%d :=" id)
-                     <+> space
-                     <+> doc_of_term t ()
+                     description
+                         (sprintf "Fill ?%d :=" id |> text)
+                         (doc_of_term t ())
                 )
         in
         fill_hole id t
@@ -243,9 +278,20 @@ struct
         let open Pretty in
         let* _ =
             trace
-                (fun _ -> text (sprintf "Wait for ?%d" id))
+                (fun _ -> text (sprintf "Wait ?%d" id))
         in
-        wait_hole id
+        let* t = wait_hole id in
+        let* () =
+            trace (
+                fun () ->
+                    description
+                        (text "Got")
+                        (description
+                             (text (sprintf "?%d =" id))
+                             (doc_of_term t ()))
+            )
+        in
+        return t
 
 
 
@@ -391,10 +437,12 @@ struct
         let* _ =
             trace (fun () ->
                 let open Pretty in
-                text "Unify" <+> space
-                <+> doc_of_term quad.act ()
-                <+> space <+> text "with" <+> space
-                <+> doc_of_term quad.req ()
+                [
+                    (text "Unify", doc_of_term quad.act ())
+                    ;
+                    (text "with", doc_of_term quad.req ())
+                ]
+                |> descriptions
             )
         in
 

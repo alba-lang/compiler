@@ -22,7 +22,7 @@ let success_term_tests
         "(ar (Any 1 ) Prop (Any 0))"
         ;
         false, false,
-        "(pi ((%x (Any 1)) (%y (Any 0))) Prop)"
+        "(pi (#(%x (Any 1)) (%y (Any 0))) Prop)"
         ;
     ]
 
@@ -54,7 +54,7 @@ let execute_success_term_test
             in
             doc
             <+>
-            Tracer.doc (Elab.State.tracer (Parser.state p))
+            Tracer.doc_sorted (Elab.State.tracer (Parser.state p))
         else
             doc
     in

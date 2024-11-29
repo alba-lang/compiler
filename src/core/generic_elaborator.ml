@@ -14,7 +14,7 @@ sig
     type message
     type t
 
-    val add: tick -> task -> message -> t -> t
+    val add: tick -> task -> int -> message -> t -> t
 end
 
 
@@ -133,8 +133,10 @@ struct
 
 
     let trace (msg: Tracer.message) (s: t): unit =
+        let qu = task_queue s.active s
+        in
         s.tracer <-
-            Tracer.add s.tick (path s) msg s.tracer
+            Tracer.add s.tick qu.path qu.n_childs msg s.tracer
 
 
     let create_hole (hole: Hole.t) (s: t): int =
@@ -605,7 +607,7 @@ struct
 
     let empty: t = []
 
-    let add (n: tick) (task: task) (s: string) (tr: t): t =
+    let add (n: tick) (task: task) (_: int) (s: string) (tr: t): t =
         (n, task, s) :: tr
 
     let print (prefix: string) (tr: t): unit =

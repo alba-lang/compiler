@@ -16,9 +16,13 @@ sig
 
     type t       (** Type of the tracer *)
 
-    val add: tick -> task -> message -> t -> t
-    (** [add tick task message tracer]
-        Add [message] at [tick] from [task] to [tracer]. *)
+    val add: tick -> task -> int -> message -> t -> t
+    (** [add tick task nchilds message tracer]
+        Add [message] at [tick] from [task] with [nchilds] to [tracer].
+
+        [nchilds] is the number of children the task has at the point of tracing
+        the message
+    *)
 end
 
 
