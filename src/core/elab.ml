@@ -613,7 +613,7 @@ let fill_ehole (id: int) (t: term): unit t =
 
 let error_handler
         (n: int)
-        (f: int -> (int list * Hole.t * Value.t option))
+        (f: int -> (int list * bool * Hole.t * Value.t option))
     : Error.t
     =
     let open Pretty
@@ -623,11 +623,11 @@ let error_handler
             empty
         else
             match f i with
-            | _, _, Some _ ->
+            | _, _, _, Some _ ->
                 holes (i + 1)
 
-            | _, h, None ->
-                if Hole.is_unifiable h then
+            | _, has_wait, h, None ->
+                if has_wait && Hole.is_unifiable h then
                     sprintf " %d" i |> text
                     <+> holes (i + 1)
                 else

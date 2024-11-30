@@ -290,7 +290,10 @@ struct
 
 
     let run
-            (fail: int -> (int -> (int list * Hole.t * Value.t option)) -> Final.t)
+            (fail:
+                 int
+             -> (int -> (int list * bool * Hole.t * Value.t option))
+             -> Final.t)
             (root: action)
             (tracer: Tracer.t)
         : Final.t * Tracer.t
@@ -306,7 +309,10 @@ struct
                     (fun id ->
                          let hq = hole_queue id state in
                          let tq = task_queue hq.created_by state in
-                         tq.path, hq.hole, hq.value
+                         tq.path,
+                         tq.tasks_waiting <> [],
+                         hq.hole,
+                         hq.value
                     ),
                 state.tracer
 
@@ -539,7 +545,7 @@ struct
     let run
             (failure:
                  int
-                 -> (int -> (int list * Hole.t * Value.t option))
+                 -> (int -> (int list * bool * Hole.t * Value.t option))
                  -> Error.t)
             (main: Final.t t)
             (tracer: Tracer.t)
@@ -634,14 +640,14 @@ open Printf
 
 
 let reporter
-        (n: int) (f: int -> (int list * Hole.t * Value.t option))
+        (n: int) (f: int -> (int list * bool * Hole.t * Value.t option))
     : string
     =
     let rec report i =
         if i = n then
             "no empty values"
         else
-            let (_, hole, value) = f i in
+            let (_, _, hole, value) = f i in
             match value with
             | None ->
                 sprintf "cannot make %s" hole

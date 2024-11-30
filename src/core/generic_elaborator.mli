@@ -131,7 +131,7 @@ sig
     (** {1 Run the Elaborator} *)
 
     val run:
-        (int -> (int -> (int list * Hole.t * Value.t option)) -> Error.t)
+        (int -> (int -> (int list * bool * Hole.t * Value.t option)) -> Error.t)
         -> Final.t t
         -> Tracer.t
         -> ((Final.t, Error.t) result * Tracer.t)
@@ -150,6 +150,7 @@ sig
         The error handler gets for each hole:
 
         - The task which created the hole.
+        - A flag indicating the presence of waiting tasks.
         - The hole metadata.
         - An optional value which indicates if the hole has been filled.
     *)
