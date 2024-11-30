@@ -29,9 +29,9 @@ module State:
 sig
     type t
 
-    val make:          gamma -> t
-    val make_trace:    gamma -> t
-    val make_no_trace: gamma -> t
+    val make:             gamma -> t
+    val make_tracing:     gamma -> t
+    val make_not_tracing: gamma -> t
 
     val tracer: t -> Tracer.t
 end

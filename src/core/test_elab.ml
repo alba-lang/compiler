@@ -2,12 +2,125 @@ open Fmlib_parse
 
 module Pretty = Fmlib_pretty.Print
 module Error  = Std.Error
+module Parser = Il_parser.Parser
+
+
+
+
+
+
+
+
+let run_on_string (trace_flag: bool) (src: string): Parser.t =
+    let open Il_parser in
+    let open Parser in
+    let gamma =
+        Elab.(make_gamma (make_globals ()))
+    in
+    let state =
+        if trace_flag then
+            Elab.State.make_tracing gamma
+        else
+            Elab.State.make gamma
+    in
+    let p = term_parser state in
+    run_on_string src p
+
+
+
+let doc_with_tracer trace_flag p doc =
+    if trace_flag then
+        let open Pretty
+        in
+        doc
+        <+>
+        Tracer.doc_sorted (Elab.State.tracer (Parser.state p))
+    else
+        doc
+
+
+let doc_of_result flag t: Pretty.doc =
+    let open Pretty
+    in
+    if flag then
+        Elab.doc_of_term t ()
+        <+> text ": "
+        <+> Elab.(doc_of_term (type_of_term t) ())
+        <+> cut
+    else
+        empty
+
+
+
+let doc_of_error flag src p: Pretty.doc =
+    assert (not (Parser.has_succeeded p));
+    let open Pretty in
+    if flag then
+        let module Reporter = Error_reporter.Make (Parser) in
+        Reporter.(
+            make Error.range Error.doc p
+            |> run_on_string src
+        )
+    else
+        empty
+
+
+
+let print_doc doc: unit =
+        doc
+        |> Pretty.layout 80
+        |> Pretty.write_to_channel stdout
+
+
+
+let print_success
+        (print_res_flag: bool)
+        (trace_flag: bool)
+        (p: Parser.t)
+    : unit
+    =
+    assert (Parser.has_succeeded p);
+    match Parser.final p with
+    | Elab.Final.Term t ->
+        doc_of_result print_res_flag t
+        |> doc_with_tracer trace_flag p
+        |> print_doc
+
+    | _ ->
+        assert false (* cannot happen *)
+
+
+
+
+let print_failure
+        (error_flag: bool)
+        (trace_flag: bool)
+        (src: string)
+        (p: Parser.t)
+    : unit
+    =
+    assert (not (Parser.has_succeeded p));
+    doc_of_error error_flag src p
+    |> doc_with_tracer trace_flag p
+    |> print_doc
+
+
+
+
 
 
 type success_term_test =
     (* print result, print trace, source *)
     bool * bool * string
 
+
+
+
+
+(*
+    Success Testcases
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+*)
 let success_term_tests
     : success_term_test list
     =
@@ -27,76 +140,19 @@ let success_term_tests
     ]
 
 
+
 let execute_success_term_test
         ((print_res_flag, trace_flag, src): success_term_test)
     : bool
     =
-    let open Il_parser in
-    let open Parser in
-    let gamma =
-        Elab.(make_gamma (make_globals ()))
-    in
-    let state =
-        if trace_flag then
-            Elab.State.make_trace gamma
-        else
-            Elab.State.make gamma
-    in
-    let p = term_parser state in
-    let p = run_on_string src p
-    in
-    let module Reporter =
-        Error_reporter.Make (Parser)
-    in
-    let doc_with_tracer doc =
-        if trace_flag then
-            let open Pretty
-            in
-            doc
-            <+>
-            Tracer.doc_sorted (Elab.State.tracer (Parser.state p))
-        else
-            doc
-    in
-    if not (has_succeeded p) then
-        begin
-            (
-                doc_with_tracer
-                Reporter.(
-                    make Error.range Error.doc p
-                    |> run_on_string src
-                )
-            )
-            |> Pretty.layout 80
-            |> Pretty.write_to_channel stdout;
-            false
-        end
-    else if print_res_flag then
-        begin
-            (match final p with
-             | Elab.Final.Term t ->
-
-                 let open Pretty
-                 in
-                 let doc =
-                     Elab.doc_of_term t ()
-                     <+> text ": "
-                     <+> Elab.(doc_of_term (type_of_term t) ())
-                 in
-                 let doc =
-                     doc_with_tracer (doc <+> cut)
-                 in
-                 doc
-                 |> Pretty.layout 80
-                 |> Pretty.write_to_channel stdout
-
-             | _ ->
-                 assert false (* cannot happen *)
-            );
-            true
-        end
+    let p = run_on_string trace_flag src in
+    let ok = Parser.has_succeeded p in
+    if not ok then
+            print_failure true trace_flag src p
     else
-        true
+            print_success print_res_flag trace_flag p;
+    ok
+
 
 
 
@@ -104,3 +160,42 @@ let%test _ =
     List.for_all
         execute_success_term_test
         success_term_tests
+
+
+
+
+
+(*
+    Failure Testcases
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+*)
+
+type failure_term_test =
+    (* print error, print trace, source *)
+    bool * bool * string
+
+
+let failure_term_tests: failure_term_test list =
+    [
+        true, false,
+        "(pi (%x %y) Prop)"
+        ;
+    ]
+
+
+let execute_failure_term_test
+        ((error_flag, trace_flag, src): failure_term_test)
+    : bool
+    =
+    let p = run_on_string trace_flag src in
+    let ok = Parser.has_succeeded p in
+    if ok then
+            print_success true trace_flag p
+    else
+            print_failure error_flag trace_flag src p;
+    not ok
+
+let%test _ =
+    List.for_all
+        execute_failure_term_test
+        failure_term_tests

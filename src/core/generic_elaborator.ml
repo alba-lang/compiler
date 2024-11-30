@@ -310,7 +310,7 @@ struct
                          let hq = hole_queue id state in
                          let tq = task_queue hq.created_by state in
                          tq.path,
-                         tq.tasks_waiting <> [],
+                         hq.hole_waiting <> [],
                          hq.hole,
                          hq.value
                     ),
