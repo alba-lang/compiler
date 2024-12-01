@@ -8,6 +8,6 @@ type t =
 val type_of: t -> t
 
 
-val unify: bool -> t -> t -> bool
+val unify: t -> t -> bool
 
 val pi: t -> t -> t

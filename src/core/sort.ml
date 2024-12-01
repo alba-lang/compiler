@@ -26,33 +26,30 @@ let pi (s1: t) (s2: t): t =
 
 
 
-let unify (eq: bool) (s_act: t) (s_req: t): bool =
-    if eq then
-        s_act = s_req
-    else
-        match
-            s_act, s_req
-        with
-        | Prop, Prop ->
-            true
+let unify (s_act: t) (s_req: t): bool =
+    match
+        s_act, s_req
+    with
+    | Prop, Prop ->
+        true
 
-        | Prop, Any _ ->
-            true
+    | Prop, Any _ ->
+        true
 
-        | Prop, Top _ ->
-            true
+    | Prop, Top _ ->
+        true
 
-        | Any i, Any j ->
-            i <= j
+    | Any i, Any j ->
+        i <= j
 
-        | Any _, Top _ ->
-            true
+    | Any _, Top _ ->
+        true
 
-        | Level, Top _ ->
-            true
+    | Level, Top _ ->
+        true
 
-        | Top i, Top j ->
-            i <= j
+    | Top i, Top j ->
+        i <= j
 
-        | _, _ ->
-            false
+    | _, _ ->
+        false

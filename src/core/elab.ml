@@ -494,7 +494,7 @@ struct
 
         | Sort s_act, Sort s_req ->
 
-            if Sort.unify false s_act s_req (* boolean flag makes no sense!!!! *)
+            if Sort.unify s_act s_req
             then
                 fill_hole quad.hole quad.acthn
             else
