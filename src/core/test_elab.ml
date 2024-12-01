@@ -109,9 +109,6 @@ let print_failure
 
 
 
-type success_term_test =
-    (* print result, print trace, source *)
-    bool * bool * string
 
 
 
@@ -121,6 +118,17 @@ type success_term_test =
     Success Testcases
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 *)
+
+
+
+
+type success_term_test =
+    (* print result, print trace, source *)
+    bool * bool * string
+
+
+
+
 let success_term_tests
     : success_term_test list
     =
@@ -131,11 +139,9 @@ let success_term_tests
         false, false,
         " ( Any 0 ) "
         ;
-        (*
-        true, true,
+        false, false,
         "(an Prop (Any 0))"
         ;
-        *)
         false, false,
         "(ar (Any 1 ) Prop (Any 0))"
         ;
@@ -170,6 +176,11 @@ let%test _ =
 
 
 
+
+
+
+
+
 (*
     Failure Testcases
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -185,6 +196,11 @@ let failure_term_tests: failure_term_test list =
         false, false,
         "(pi (%x %y) Prop)"
         ;
+        (*
+        true, true,
+        "(an (Any 0) Prop)"
+        ;
+        *)
     ]
 
 

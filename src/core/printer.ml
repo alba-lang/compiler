@@ -85,15 +85,27 @@ struct
     *)
 
 
-    let rec edoc (full: bool): Term.t -> edoc = function
-        | _, Sort s ->
+    let rec edoc (full: bool) (t: Term.t): edoc =
+        match snd t with
+
+        | Sort s ->
             sort full s
 
-        | _, Meta i ->
+        | Meta i ->
             sprintf "?%d" i |> text, Prec.highest
 
-        | _, Pi (start, args, res) ->
+        | Pi (start, args, res) ->
             pi full start args res
+
+        | Ann (t, tp, _) ->
+            let td  = doc full t
+            and tpd = doc full tp
+            in
+            td <+> char ':' <+> space
+            <+> indent tpd
+            |> group,
+            Prec.colon
+
 
 
 

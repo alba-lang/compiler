@@ -208,8 +208,20 @@ let push_variable
 
 
 
-let make_annotated (_: term) (_: term): term =
-    assert false
+let make_annotated (t: term) (tp: term): term =
+    let g  = gamma_of_term t
+    and gt = gamma_of_term tp
+    in
+    assert (g == gt);
+
+    Typed (
+        g,
+        Term.annotated
+            (term_of_term t)
+            (term_of_term tp)
+            (term_of_term (type_of_term tp)),
+        tp
+    )
 
 
 

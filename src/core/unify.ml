@@ -54,6 +54,10 @@ struct
 
             return t
 
+        | Ann (_, _, _) ->
+
+            assert false
+
 
 
     let make_quad (act: term) (req: term): quad t =
@@ -146,6 +150,14 @@ struct
 
             assert false
 
+        | Ann (_, _, _), _ ->
+
+            assert false
+
+        | _, Ann (_, _, _) ->
+
+            assert false
+
         | Pi _,  _ ->
 
             assert false (* nyi: rigid-rigid failure *)
@@ -210,6 +222,11 @@ struct
         | Pi _ ->
 
             assert false (* nyi *)
+
+        | Ann _ ->
+
+            assert false (* Cannot happen, [t] must be in head normal form and
+                            an annotated term is not in head normal form. *)
 
 
     and flex_flex id1 id2 data: unit t =

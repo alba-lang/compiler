@@ -8,7 +8,7 @@ and t0 =
          int                            (* Start of arguments *) 
          * (Info.Bind.t * t * t) array  (* (bind, ty, s): s is always a sort *)
          * (t * t)                      (* Result type and its sort *)
-
+    | Ann of t * t * t
 
 
 let is_up_by (j, _) = j
@@ -29,6 +29,21 @@ let any i : t = sort (Any i)
 let top i : t = sort (Top i)
 
 let meta i: t = 0, Meta i
+
+
+
+let annotated (i1,_ as t: t) (i2,_ as tp: t) (i3,s0 as s: t): t =
+    assert (i1 = i2);
+    assert (i2 = i3);
+    let _ =
+        match s0 with
+        | Sort _ ->
+            ()
+        | _ ->
+            assert false (* [s] is the type of a type and therefore must be a
+                            sort. *)
+    in
+    i1, Ann (t, tp, s)
 
 
 
