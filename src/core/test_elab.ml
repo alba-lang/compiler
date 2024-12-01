@@ -43,9 +43,9 @@ let doc_of_result flag t: Pretty.doc =
     let open Pretty
     in
     if flag then
-        Elab.doc_of_term t ()
+        Elab.doc_of_term t
         <+> text ": "
-        <+> Elab.(doc_of_term (type_of_term t) ())
+        <+> Elab.(doc_of_term (type_of_term t))
         <+> cut
     else
         empty

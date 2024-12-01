@@ -2,6 +2,7 @@ open Fmlib_std
 open Std
 
 
+module Pretty = Fmlib_pretty.Print
 
 
 
@@ -57,6 +58,9 @@ let update_type (t: term) (ty: term): term =
     | _ ->
         t
 
+
+let doc_of_term (t: term): Pretty.doc =
+    Printer.Term.base_doc true true (term_of_term t)
 
 
 let make_sort (s: Term.t) (g: t): term =

@@ -18,6 +18,9 @@ val type_of_term:  term -> term
 val update_type: term -> term -> term
 
 
+val doc_of_term: term -> Fmlib_pretty.Print.doc
+
+
 
 
 module Entry:

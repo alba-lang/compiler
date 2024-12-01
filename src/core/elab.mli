@@ -22,7 +22,7 @@ val type_of_term:  term -> term
 val make_globals: unit -> globals
 val make_gamma:   globals -> gamma
 
-val doc_of_term: term  -> unit -> Fmlib_pretty.Print.doc
+val doc_of_term: term -> Fmlib_pretty.Print.doc
 
 
 module State:
