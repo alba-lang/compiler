@@ -131,6 +131,11 @@ let success_term_tests
         false, false,
         " ( Any 0 ) "
         ;
+        (*
+        true, true,
+        "(an Prop (Any 0))"
+        ;
+        *)
         false, false,
         "(ar (Any 1 ) Prop (Any 0))"
         ;
@@ -177,7 +182,7 @@ type failure_term_test =
 
 let failure_term_tests: failure_term_test list =
     [
-        true, false,
+        false, false,
         "(pi (%x %y) Prop)"
         ;
     ]

@@ -189,6 +189,10 @@ struct
             c_hole
 
 
+    let type_of (h: t): term =
+        h.res_tp
+
+
 
     let doc (h: t) (): Pretty.doc =
         let open Pretty in
@@ -470,6 +474,13 @@ struct
         |> return
 
 
+    let make_next_data_default data: data t =
+        make_next_data
+            data.quad.acthn
+            data.quad.reqhn
+            data
+
+
 
     let rec uni data: unit t =
         let quad =
@@ -500,9 +511,9 @@ struct
             else
                 assert false
 
-        | Meta _, Meta _ ->
+        | Meta id1, Meta id2 ->
 
-            assert false
+            flex_flex id1 id2 data
 
         | Meta id, _ ->
 
@@ -526,11 +537,11 @@ struct
 
         | Pi _,  _ ->
 
-            assert false
+            assert false (* nyi: rigid-rigid failure *)
 
         | _,  Pi _ ->
 
-            assert false
+            assert false (* nyi: rigid-rigid failure *)
 
 
 
@@ -558,10 +569,7 @@ struct
             in
             let* _ = fill_flex_with_rigid meta_id rigid in
             let* data_next =
-                     make_next_data
-                         data.quad.acthn
-                         data.quad.reqhn
-                         data
+                     make_next_data_default data
             in
             uni_wait_fill
                 data.quad.hole
@@ -569,10 +577,7 @@ struct
         else
             let* _ = wait_hole meta_id in
             let* data_next =
-                     make_next_data
-                         data.quad.acthn
-                         data.quad.reqhn
-                         data
+                     make_next_data_default data
             in
             uni_wait_fill
                 data.quad.hole
@@ -596,6 +601,17 @@ struct
             assert false (* nyi *)
 
 
+    and flex_flex id1 id2 data: unit t =
+        let cb _ =
+            let* data_next = make_next_data_default data in
+            uni_wait_fill data.quad.hole data_next
+        in
+        let cb1 = id1, cb
+        and cb2 = id2, cb
+        in
+        wait_one_of_holes cb1 [cb2]
+
+
 
     and uni_wait (data: data): term t =
         (* Spawn a task to make the unification with [data] and wait for unified
@@ -614,12 +630,16 @@ struct
 
 
 
-
     let unify (act: term) (req: term): term t =
         (* Unify [act] with [req] and return the unified normal form of [act].
          *)
         let* data = make_data act req in
         uni_wait data
+
+
+    let into_hole (act: term) (id: int): term t =
+        let* h = get_hole id in
+        unify act (Hole.type_of h)
 end
 
 
@@ -641,11 +661,11 @@ end
 
 
 let fill_ehole (id: int) (t: term): unit t =
-
-    let  tp_act = Gamma.type_of_term t in
-    let* h      = get_hole id in
-    let  tp_req = h.res_tp in
-    let* tp_act = Unify.unify tp_act tp_req in
+    let* tp_act =
+        Unify.into_hole
+            (Gamma.type_of_term t)
+            id
+    in
     fill_hole id (Gamma.update_type t tp_act)
 
 
@@ -891,6 +911,29 @@ let any (level: int) (range: range): Ast.term =
     let* _ = trace (fun _ -> Pretty.text (sprintf ">>> Make (Any %d) <<<" level))
     in
     fill_ehole id (Gamma.any level g)
+
+
+
+let annotated (t: Ast.term) (tp: Ast.term) (range: range): Ast.term =
+    (* term: Type *)
+    range
+    ,
+    fun g id ->
+        let* htp = create_hole
+            Hole.(e_type "type of annotated" g)
+        in
+        let* mtp = meta htp
+        in
+        let* ht = create_hole
+            Hole.(e_term "term of annotated" mtp)
+        in
+        let* _ = elab_term t  g ht  in
+        let* _ = elab_term tp g htp in
+        let* _ = Unify.into_hole mtp id in
+        let* t = wait_hole ht in
+        let* tp = wait_hole htp in
+        let  t_an = Gamma.make_annotated t tp in
+        fill_hole id t_an
 
 
 

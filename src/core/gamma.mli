@@ -68,6 +68,7 @@ val find_global: Name.t -> t -> (int * int) list
 val push_variable: Info.Bind.t -> bool -> term  ->  t -> t
 
 
+val make_annotated: term -> term -> term
 val make_pi1: Info.Bind.t -> term -> term -> term
 val make_pi: term -> t -> t -> term
 

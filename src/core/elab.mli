@@ -63,6 +63,8 @@ val prop: range -> Ast.term
 
 val any:  int -> range -> Ast.term
 
+val annotated: Ast.term -> Ast.term -> range -> Ast.term
+
 val arrow: Ast.term list -> int  -> Ast.term -> range ->  Ast.term
 
 

@@ -204,6 +204,11 @@ let push_variable
 
 
 
+let make_annotated (_: term) (_: term): term =
+    assert false
+
+
+
 
 let make_pi1 (b: Info.Bind.t) (tp: term) (rtp: term): term =
     let g0 = gamma_of_term tp

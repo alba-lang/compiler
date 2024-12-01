@@ -189,6 +189,9 @@ and compound_term (tag: string): (range -> term) t =
     | "Any" ->
         any ()
 
+    | "an" ->
+        annotated ()
+
     | "ap" ->
         assert false
 
@@ -205,6 +208,13 @@ and compound_term (tag: string): (range -> term) t =
 
 and any (): (range -> term) t =
     map (fun dstr -> Elab.any (int_of_string dstr)) digits
+
+
+
+and annotated (): (range -> term) t =
+    let* t  = term () |> ws_after in
+    let* tp = term () in
+    Elab.annotated t tp |> return
 
 
 
