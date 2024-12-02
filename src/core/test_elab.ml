@@ -68,7 +68,7 @@ let doc_of_error flag src p: Pretty.doc =
 
 let print_doc doc: unit =
         doc
-        |> Pretty.layout 80
+        |> Pretty.layout_with_ribbon 80 50
         |> Pretty.write_to_channel stdout
 
 
@@ -196,11 +196,9 @@ let failure_term_tests: failure_term_test list =
         false, false,
         "(pi (%x %y) Prop)"
         ;
-        (*
-        true, true,
+        false, false,
         "(an (Any 0) Prop)"
         ;
-        *)
     ]
 
 

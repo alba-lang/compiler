@@ -250,6 +250,28 @@ struct
     include Generic_elaborator.Make (Hole) (Value) (Tracer) (Final) (Error)
 
 
+    module ArrayM =
+    struct
+        let map (f: 'a -> 'b t) (arr: 'a array): 'b array t =
+            let len = Array.length arr in
+            if len = 0 then
+                return [||]
+
+            else
+                let* b = f arr.(0) in
+                let arrb = Array.make len b in
+                let rec map_inner i: unit t =
+                    if i = len then
+                        return ()
+                    else
+                        let* b = f arr.(i) in
+                        arrb.(i) <- b;
+                        map_inner (i + 1)
+                in
+                let* () = map_inner 1 in
+                return arrb
+    end
+
 
     type 'a hole_callback = int * (term -> 'a t)
 
@@ -341,6 +363,63 @@ struct
     let meta (id: int): term t =
         let* h = get_hole id in
         Gamma.meta id (Hole.type_of h) |> return
+
+
+
+    let zonk_base (wait: bool) (t: term): term t =
+        let rec zonk (t: Term.t): Term.t t =
+            let n, t0 = t
+            in
+            let meta id =
+                if wait then
+                    let* v = wait_hole id in
+                    zonk (Gamma.term_of_term v)
+                else
+                    let* v = value_opt id in
+                    match v with
+                    | None ->
+                        return t
+                    | Some v ->
+                        zonk (Gamma.term_of_term v)
+            in
+            match t0 with
+            | Sort _ ->
+                return t
+
+            | Meta id ->
+                meta id
+
+            | Pi (_, args, (rtp, rs)) ->
+                let* args =
+                    ArrayM.map
+                        (fun (b, tp, s) ->
+                             (* s is always a sort, doesn't have meta variables *)
+                             let* tp = zonk tp in
+                             (b, tp, s) |> return)
+                        args
+                in
+                let* rtp = zonk rtp in
+                return (n, Term.Pi (n, args, (rtp, rs)))
+
+            | Ann (t, tp, s) ->
+
+                let* t  = zonk t  in
+                let* tp = zonk tp in
+                return (n, Term.Ann (t, tp, s))
+        in
+        let  traw = Gamma.term_of_term t in
+        let* traw = zonk traw in
+        return (Gamma.update_term t traw)
+
+
+
+    let zonk_avail (t: term): term t =
+        zonk_base false t
+
+
+
+    let zonk (t: term): term t =
+        zonk_base true t
 
 
 

@@ -51,12 +51,28 @@ let type_of_term: term -> term = function
         tp
 
 
+
 let update_type (t: term) (ty: term): term =
     match t with
     | Typed (g, raw, _) ->
         Typed (g, raw, ty)
     | _ ->
         t
+
+
+
+let update_term (t: term) (traw: Term.t): term =
+    match t with
+    | Typed (g, _, tp) ->
+        Typed (g, traw, tp)
+
+    | Free (_, s0) ->
+        match traw with
+        | _, Sort s ->
+            assert (s = s0);
+            t
+        | _ ->
+            assert false (* illegal call *)
 
 
 let doc_of_term (t: term): Pretty.doc =

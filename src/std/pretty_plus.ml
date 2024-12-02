@@ -4,19 +4,14 @@ let indent (d: doc): doc =
     nest 4 d
 
 
-
 let description (d1: doc) (d2: doc): doc =
-    d1 <+> space <+> indent d2 |> group
+    d1 <+> space <+> indent d2
+    |> group
 
 
 let descriptions (ds: (doc * doc) list): doc =
-    List.map
-        (fun (d1, d2) ->
-             d1
-             <+> space
-             <+> (indent d2)
-             |> group
-        )
-        ds
+    ds
+    |> List.map
+        (fun (d1, d2) -> description d1 d2)
     |> separated_by space
     |> group

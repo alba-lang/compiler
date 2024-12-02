@@ -47,9 +47,10 @@ module Unify = Unify.Make (Final)
 *)
 
 
-let fill_ehole (id: int) (t: term): unit t =
+let fill_ehole (range: range) (id: int) (t: term): unit t =
     let* tp_act =
         Unify.into_hole
+            range
             (Gamma.type_of_term t)
             id
     in
@@ -83,14 +84,6 @@ let elab_term (ast: Ast.term) (g: gamma) (id: int): int t   (* task id *)
 
 
 
-(*
-let elab_term_wait (ast: Ast.term) (g: gamma) (id: int): term t =
-    let* _ = elab_term ast g id in
-    wait_hole id
-*)
-
-
-
 
 
 
@@ -101,7 +94,7 @@ let prop (range: range): Ast.term =
     fun g id ->
     let* _ = trace (fun _ -> Pretty.text ">>> Make Prop <<<")
     in
-    fill_ehole id (Gamma.prop g)
+    fill_ehole range id (Gamma.prop g)
 
 
 
@@ -111,7 +104,7 @@ let any (level: int) (range: range): Ast.term =
     fun g id ->
     let* _ = trace (fun _ -> Pretty.text (sprintf ">>> Make (Any %d) <<<" level))
     in
-    fill_ehole id (Gamma.any level g)
+    fill_ehole range id (Gamma.any level g)
 
 
 
@@ -130,7 +123,7 @@ let annotated (t: Ast.term) (tp: Ast.term) (range: range): Ast.term =
         in
         let* _ = elab_term t  g ht  in
         let* _ = elab_term tp g htp in
-        let* _ = Unify.into_hole mtp id in
+        let* _ = Unify.into_hole range mtp id in
         let* t = wait_hole ht in
         let* tp = wait_hole htp in
         let  t_an = Gamma.make_annotated t tp in
@@ -176,7 +169,7 @@ let pi1
     in
     let* _    = elab_term rtp g hrtp in
     let make tp rtp =
-        fill_ehole par_id (Gamma.make_pi1 b tp rtp)
+        fill_ehole range par_id (Gamma.make_pi1 b tp rtp)
     in
     wait_one_of_holes
         (
@@ -189,11 +182,6 @@ let pi1
                 let* rtp = wait_hole hrtp in
                 make tp rtp
         )]
-(*
-    let* rtp  = elab_term_wait rtp g hrtp in
-    let* tp   = wait_hole hty in
-    fill_ehole par_id (Gamma.make_pi1 b tp rtp)
-*)
 
 
 

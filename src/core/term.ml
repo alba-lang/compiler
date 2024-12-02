@@ -8,7 +8,7 @@ and t0 =
          int                            (* Start of arguments *) 
          * (Info.Bind.t * t * t) array  (* (bind, ty, s): s is always a sort *)
          * (t * t)                      (* Result type and its sort *)
-    | Ann of t * t * t
+   | Ann of t * t * t
 
 
 let is_up_by (j, _) = j

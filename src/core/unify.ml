@@ -9,6 +9,7 @@ struct
 end
 
 
+type range = Fmlib_parse.Position.range
 
 
 module Make (Final: ANY) =
@@ -25,6 +26,7 @@ struct
     }
 
     type data = {
+        range: range;
         quad:  quad;
         stack: quad list;
     }
@@ -74,16 +76,16 @@ struct
 
 
 
-    let make_data (act: term) (req: term): data t =
+    let make_data (range: range) (act: term) (req: term): data t =
         let* quad = make_quad act req
         in
-        { quad; stack = [] }
+        { range; quad; stack = [] }
         |> return
 
 
     let make_next_data (act: term) (req: term) data : data t =
         let* quad = make_quad act req in
-        { quad; stack = quad :: data.stack }
+        { data with quad; stack = quad :: data.stack }
         |> return
 
 
@@ -94,6 +96,27 @@ struct
             data
 
 
+
+    let rigid_rigid_failure data =
+        let open Pretty in
+        let* _ =
+            trace_doc (text "rigid-rigid unification failure")
+        in
+        let* act = zonk_avail data.quad.act in
+        let* req = zonk_avail data.quad.req in
+        Error.make
+            data.range
+            "invalid type"
+            (text "This term has type"
+             <+> cut <+> cut
+             <+> indent (doc_of_term act)
+             <+> cut <+> cut
+             <+> text "but it should have type"
+             <+> cut <+> cut
+             <+> indent (doc_of_term req)
+             <+> cut <+> cut
+            )
+        |> fail
 
 
 
@@ -108,6 +131,10 @@ struct
                     (text "Unify", doc_of_term quad.act)
                     ;
                     (text "with", doc_of_term quad.req)
+                    ;
+                    (text "hn", doc_of_term quad.acthn)
+                    ;
+                    (text "with", doc_of_term quad.reqhn)
                 ]
                 |> descriptions
             )
@@ -118,13 +145,9 @@ struct
             term_of_term quad.reqhn |> snd
         with
 
-        | Sort s_act, Sort s_req ->
+        | Sort s_act, Sort s_req when Sort.unify s_act s_req ->
 
-            if Sort.unify s_act s_req
-            then
-                fill_hole quad.hole quad.acthn
-            else
-                assert false
+            fill_hole quad.hole quad.acthn
 
         | Meta id1, Meta id2 ->
 
@@ -158,13 +181,14 @@ struct
 
             assert false
 
-        | Pi _,  _ ->
 
-            assert false (* nyi: rigid-rigid failure *)
+        (* rigid-rigid failures *)
 
-        | _,  Pi _ ->
+        | Sort _,    _
+        | Pi   _,    _
+            ->
 
-            assert false (* nyi: rigid-rigid failure *)
+            rigid_rigid_failure data
 
 
 
@@ -240,7 +264,6 @@ struct
         wait_one_of_holes cb1 [cb2]
 
 
-
     and uni_wait (data: data): term t =
         (* Spawn a task to make the unification with [data] and wait for unified
            actual term. *)
@@ -258,14 +281,14 @@ struct
 
 
 
-    let two (act: term) (req: term): term t =
+    let two (range: range) (act: term) (req: term): term t =
         (* Unify [act] with [req] and return the unified normal form of [act].
          *)
-        let* data = make_data act req in
+        let* data = make_data range act req in
         uni_wait data
 
 
-    let into_hole (act: term) (id: int): term t =
+    let into_hole (range: range) (act: term) (id: int): term t =
         let* h = get_hole id in
-        two act (Hole.type_of h)
+        two range act (Hole.type_of h)
 end

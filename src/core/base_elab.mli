@@ -50,6 +50,7 @@ sig
     type 'a hole_callback = int * (term -> 'a t)
 
     val trace: (unit -> doc) -> unit t
+    val fail: Error.t -> 'a t
     val trace_doc: doc -> unit t
     val value_opt: int -> term option t
     val get_hole:  int -> Hole.t t
@@ -60,6 +61,9 @@ sig
 
     val spawn: unit t -> int t
     val meta: int -> term t
+
+    val zonk_avail: term -> term t
+    val zonk: term -> term t
 
     val run: Final.t t -> State.t -> (Final.t, Error.t) result * State.t
 end
