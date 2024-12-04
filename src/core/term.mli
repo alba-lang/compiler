@@ -23,4 +23,3 @@ val sort: Sort.t -> t
 val annotated: t -> t -> t -> t
 val pi_sort: t -> t -> t
 val pi1: (Info.Bind.t * t * t) -> (t * t) -> t
-val pi: (Info.Bind.t * t * t) array -> (t * t) -> t

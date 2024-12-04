@@ -32,18 +32,19 @@ let meta i: t = 0, Meta i
 
 
 
-let annotated (i1,_ as t: t) (i2,_ as tp: t) (i3,s0 as s: t): t =
-    assert (i1 = i2);
-    assert (i2 = i3);
+
+let annotated (i1, t: t) (i2, tp: t) (i3, s: t): t =
     let _ =
-        match s0 with
+        match s with
         | Sort _ ->
             ()
         | _ ->
             assert false (* [s] is the type of a type and therefore must be a
                             sort. *)
     in
-    i1, Ann (t, tp, s)
+    let upn = min (min i1 i2) i3 in
+    upn, Ann ((i1 - upn, t), (i2 - upn, tp), (i3 - upn, s))
+
 
 
 
@@ -57,52 +58,13 @@ let pi_sort (t1: t) (t2: t): t =
 
 
 
-let pi1
-        ((_, (na, _), _) as a: (Info.Bind.t * t * t))
-        (((nr, r0), _)   as r: t * t)
-    : t
-    =
-    min na nr
+let pi1 (a: (Info.Bind.t * t * t)) ((_, r0), _ as r: t * t): t =
+    0
     ,
     match r0 with
     | Pi (start, args, rtp) ->
         assert (start = 0);
-        Pi (
-            start,
-            Fmlib_std.Array.insert 0 a args,
-            rtp
-        )
+        Pi (start, Fmlib_std.Array.insert 0 a args, rtp)
+
     | _ ->
         Pi (0, [|a|], r)
-
-
-
-
-let pi
-        (args: (Info.Bind.t * t * t) array)
-        (((nres, _), _) as res: t * t)
-    : t
-    =
-    let n =
-        Array.fold_left
-            (fun n (_, (narg, _), _) -> min narg n)
-            nres
-            args
-    in
-    n, Pi (0, args, res)
-
-
-(*  Note [Pi Lifted]
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-    Examples:
-
-        all (x: (0, A)): (0, R)         -> 0, Pi ...
-
-        all (x: (0, A)): (_, R)         -> 0, Pi ...
-
-        all (x: (_, A)): (0, R)         -> 0, Pi ...
-
-
-        all (x: (n, A)): (m, R)         -> min n m, Pi ...
-*)

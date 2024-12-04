@@ -263,35 +263,6 @@ let make_pi1 (b: Info.Bind.t) (tp: term) (rtp: term): term =
 
 
 
-let make_pi (t: term) (g: t) (g0: t): term =
-    assert (length g0 <= length g);
-    let rec make_args i (args, s) =
-        if i = length g0 then
-            args, s
-        else
-            let i = i - 1
-            in
-            let e = entry i g in
-            assert (e.def = None);
-            let ty = term_of_term e.typ in
-            let st = term_of_term (type_of_term e.typ) in
-            let s  = Term.pi_sort st s in
-            make_args i ((e.info, ty, s) :: args, s)
-    in
-    let res  = term_of_term t in
-    let sres = term_of_term (type_of_term t)
-    in
-    let args, s = make_args (length g) ([], sres)
-    in
-    let args = Array.of_list args
-    in
-    let pi = Term.pi args (res, sres) in
-    Typed (g0, pi, make_sort s g0)
-
-
-
-
-
 let any (level: int) (g: t): term =
     Free (g, Sort.Any level)
 
