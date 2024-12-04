@@ -10,6 +10,7 @@ type t = {
 
 
 let make (range: Position.range) (tag: string) (doc: Print.doc): t =
+    let doc = Print.(doc <+> cut) in
     { range; tag; doc }
 
 

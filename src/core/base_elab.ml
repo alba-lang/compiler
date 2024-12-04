@@ -389,24 +389,40 @@ struct
             | Meta id ->
                 meta id
 
-            | Pi (_, args, (rtp, rs)) ->
-                let* args =
-                    ArrayM.map
-                        (fun (b, tp, s) ->
-                             (* s is always a sort, doesn't have meta variables *)
-                             let* tp = zonk tp in
-                             (b, tp, s) |> return)
-                        args
-                in
+            | Var _ ->
+                return t
+
+            | App (hd, args) ->
+                let* hd   = zonk hd in
+                let* args = ArrayM.map zonk args in
+                return (n, Term.App (hd, args))
+
+            | Lam (start, args, (body, ty, s)) ->
+                let* args = zonk_fargs args in
+                let* body = zonk body in
+                let* ty   = zonk ty in
+                return (n, Term.Lam (start, args, (body, ty, s)))
+
+            | Pi (start, args, (rtp, rs)) ->
+                let* args = zonk_fargs args in
                 let* rtp = zonk rtp in
-                return (n, Term.Pi (n, args, (rtp, rs)))
+                return (n, Term.Pi (start, args, (rtp, rs)))
 
             | Ann (t, tp, s) ->
 
                 let* t  = zonk t  in
                 let* tp = zonk tp in
                 return (n, Term.Ann (t, tp, s))
+
+        and zonk_fargs args =
+            ArrayM.map
+                (fun (b, tp, s) ->
+                     (* s is always a sort, doesn't have meta variables *)
+                     let* tp = zonk tp in
+                     (b, tp, s) |> return)
+                args
         in
+
         let  traw = Gamma.term_of_term t in
         let* traw = zonk traw in
         return (Gamma.update_term t traw)

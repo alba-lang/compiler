@@ -52,6 +52,15 @@ struct
                     head_normal t
             end
 
+        | Var _ ->
+            return t
+
+        | App _ ->
+            assert false (* nyi *)
+
+        | Lam _ ->
+            assert false (* nyi *)
+
         | Pi _  ->
 
             return t
@@ -139,7 +148,6 @@ struct
                 |> descriptions
             )
         in
-
         match
             term_of_term quad.acthn |> snd,
             term_of_term quad.reqhn |> snd
@@ -169,6 +177,22 @@ struct
                 quad.acthn
                 data
 
+        | Var _, Var _
+            when
+                (term_of_term quad.acthn |> fst)
+                =
+                (term_of_term quad.reqhn |> fst)
+            ->
+            fill_hole quad.hole quad.acthn
+
+        | App _, App _ ->
+
+            assert false (* nyi *)
+
+        | Lam _, Lam _ ->
+
+            assert false (* nyi *)
+
         | Pi _,  Pi _ ->
 
             assert false
@@ -184,6 +208,9 @@ struct
 
         (* rigid-rigid failures *)
 
+        | Var _,     _
+        | App _,     _
+        | Lam _,     _
         | Sort _,    _
         | Pi   _,    _
             ->
@@ -242,6 +269,18 @@ struct
         | Meta _ ->
 
             assert false (* Illegal call *)
+
+        | Var _ ->
+
+            assert false (* nyi *)
+
+        | App _ ->
+
+            assert false (* nyi *)
+
+        | Lam _ ->
+
+            assert false (* nyi *)
 
         | Pi _ ->
 

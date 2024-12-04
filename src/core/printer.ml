@@ -94,6 +94,15 @@ struct
         | Meta i ->
             sprintf "?%d" i |> text, Prec.highest
 
+        | Var n ->
+            text (Name.string n), Prec.highest
+
+        | App _ ->
+            assert false (* nyi *)
+
+        | Lam _ ->
+            assert false (* nyi *)
+
         | Pi (start, args, res) ->
             pi full start args res
 

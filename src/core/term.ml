@@ -1,14 +1,20 @@
+open Std
+
+
 type t =
     int * t0
 
 and t0 =
    | Sort of Sort.t
    | Meta of int
-   | Pi of
-         int                            (* Start of arguments *) 
-         * (Info.Bind.t * t * t) array  (* (bind, ty, s): s is always a sort *)
-         * (t * t)                      (* Result type and its sort *)
-   | Ann of t * t * t
+   | Var  of Name.t
+   | App  of t * t array
+   | Lam  of int * varbind array * (t * t * t) (* start of args *)
+   | Pi   of int * varbind array * (t * t)     (* start of args *)
+   | Ann  of t * t * t
+
+and varbind = Info.Bind.t * t * t
+
 
 
 let is_up_by (j, _) = j
@@ -31,6 +37,7 @@ let top i : t = sort (Top i)
 let meta i: t = 0, Meta i
 
 
+let var i n = i, Var n
 
 
 let annotated (i1, t: t) (i2, tp: t) (i3, s: t): t =

@@ -140,6 +140,9 @@ let success_term_tests
         " ( Any 0 ) "
         ;
         false, false,
+        "(pi (#(%A (Any 0))) %A)"
+        ;
+        false, false,
         "(an Prop (Any 0))"
         ;
         false, false,
@@ -199,6 +202,8 @@ let failure_term_tests: failure_term_test list =
         false, false,
         "(an (Any 0) Prop)"
         ;
+        false, false,
+        "%xxx"
     ]
 
 

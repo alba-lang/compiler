@@ -83,4 +83,6 @@ val any:  int -> t -> term
 val top:  int -> t -> term
 val prop: t -> term
 
+val var: int -> t -> term
+
 val meta: int -> term -> term (* id, type, gamma *)

@@ -4,6 +4,13 @@ open Fmlib_parse
 
 module type ANY = Fmlib_std.Interfaces.ANY
 
+module Pretty =
+struct
+    include Fmlib_pretty.Print
+    include Pretty_plus
+end
+
+
 
 type range      = Position.range
 
@@ -142,25 +149,34 @@ let parens (p: 'a t): 'a t =
 
 
 
-let tagged (p: string -> 'a t): 'a t =
-    parens (ws_after identifier >>= p)
+let tagged (p: string located -> 'a t): 'a t =
+    parens (identifier |> located |> ws_after >>= p)
 
 
 
-let tagged_term (p: string -> (range -> term) t): term t =
+let tagged_term (p: string located -> (range -> term) t): term t =
     map (fun (range, f) -> f range) (p |> tagged |> located)
 
 
 
 let atomic_term: term t =
-    (*name
-    </>*)
-    let* (range, s) = located identifier in 
-    match s with
-    | "Prop" ->
-        Elab.prop range |> return
-    | _ ->
-        assert false (* Error *)
+    (
+        let* r, n = located name in
+        Elab.name n r |> return
+    )
+    </>
+    (
+        let* (range, s) = located identifier in
+        match s with
+        | "Prop" ->
+            Elab.prop range |> return
+        | _ ->
+            Error.make
+                range
+                "unexpected atomic term"
+                (Pretty.text "Unexpected atomic term")
+            |> fail
+    )
 
 
 
@@ -179,8 +195,8 @@ let rec term (): term t =
     tagged_term compound_term
 
 
-and compound_term (tag: string): (range -> term) t =
-    match tag with
+and compound_term (tag: string located): (range -> term) t =
+    match snd tag with
     | "var" ->
         (* local variable *)
         let* _ = digits in
@@ -193,7 +209,10 @@ and compound_term (tag: string): (range -> term) t =
         annotated ()
 
     | "ap" ->
-        assert false
+        application ()
+
+    | "la" ->
+        lambda ()
 
     | "ar" ->
         arrow ()
@@ -202,7 +221,11 @@ and compound_term (tag: string): (range -> term) t =
         pi ()
 
     | _ ->
-        assert false (* Error case *)
+        Error.make
+            (fst tag)
+            "unexpected tag"
+            Pretty.(text "Unexpected tag")
+        |> fail
 
 
 
@@ -215,6 +238,16 @@ and annotated (): (range -> term) t =
     let* t  = term () |> ws_after in
     let* tp = term () in
     Elab.annotated t tp |> return
+
+
+
+and application (): (range -> term) t =
+    assert false (* nyi *)
+
+
+
+and lambda (): (range -> term) t =
+    assert false (* nyi *)
 
 
 

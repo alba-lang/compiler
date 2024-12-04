@@ -108,6 +108,44 @@ let any (level: int) (range: range): Ast.term =
 
 
 
+let name (n: Name.t) (range: range): Ast.term =
+    range
+    ,
+    fun g id ->
+        let* _ = trace (fun _ ->
+            Pretty.text (sprintf ">>> Make (%s) <<<" (Name.string n)))
+        in
+        match Gamma.find_local n g with
+        | Some i ->
+            fill_ehole
+                range
+                id
+                (Gamma.var i g)
+        | None ->
+            Error.make
+                range
+                "name not found"
+                Pretty.((wrap_words "I cannot find this identifier."))
+            |> fail
+
+
+
+let var (i: int) (range: range): Ast.term =
+    assert (0 <= i);
+    range
+    ,
+    fun g id ->
+        if Gamma.length g <= i then
+            Error.make
+                range
+                "Not a valid De Bruijn index."
+                Pretty.(text "Not a valid De Bruijn index.")
+            |> fail
+        else
+            fill_ehole range id (Gamma.var i g)
+
+
+
 let annotated (t: Ast.term) (tp: Ast.term) (range: range): Ast.term =
     (* term: Type *)
     range

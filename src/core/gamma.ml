@@ -75,8 +75,10 @@ let update_term (t: term) (traw: Term.t): term =
             assert false (* illegal call *)
 
 
+
 let doc_of_term (t: term): Pretty.doc =
     Printer.Term.base_doc true true (term_of_term t)
+
 
 
 let make_sort (s: Term.t) (g: t): term =
@@ -114,6 +116,9 @@ struct
 
     let info (e: t): Info.Bind.t =
         e.info
+
+    let name (e: t): Name.t =
+        Info.Bind.name e.info
 
     let definition (e: t): term option =
         e.def
@@ -190,14 +195,25 @@ let is_prefix (g0: t) (g: t): bool =
 
 let typ (i: int) (g: t): term =
     assert (i < length g);
-    assert false
-    (*Term.pair_up (length g - i) (Entry.typ (entry i g))*)
+    let e = entry i g in
+    match e.typ with
+    | Free _  as tp->
+        tp
+    | Typed (g0, raw, s) ->
+        Typed (
+            g,
+            Term.up (length g - length g0) raw,
+            s
+        )
 
+
+let name (i: int) (g: t): Name.t =
+    Entry.name (entry i g)
 
 
 
 let find_local (name: Name.t) (g: t): int option =
-        Name_map.find_opt name g.map
+    Name_map.find_opt name g.map
 
 
 
@@ -273,6 +289,15 @@ let top (level: int) (g: t): term =
 
 let prop (g: t): term =
     Free (g, Sort.Prop)
+
+
+let var (i: int) (g: t): term =
+    Typed (
+        g,
+        Term.var (de_bruijn i g) (name i g),
+        typ i g
+    )
+
 
 
 let meta (id: int) (tp: term): term =
