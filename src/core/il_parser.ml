@@ -94,7 +94,7 @@ let ws_around (p: 'a t): 'a t =
 let zero_or_more_rev (p: 'a t): (int * 'a list) t =
     let rec scan n lst =
         (
-            let* a = ws_before p in
+            let* a = ws_after p in
             scan (n + 1) (a :: lst)
         )
         </>
@@ -108,13 +108,13 @@ let _ = zero_or_more_rev
 let one_or_more_rev (p: 'a t): (int * 'a list * 'a) t =
     let rec scan n lst a0 =
         (
-            let* a = ws_before p in
+            let* a = ws_after p in
             scan (n + 1) (a0 :: lst) a
         )
         </>
         return (n, lst, a0)
     in
-    let* a = p in
+    let* a = ws_after p in
     scan 0 [] a
 
 
@@ -138,8 +138,8 @@ let digits: string t =
 
 
 let parens_generic (left: _ t) (p: 'a t) (right: _ t): 'a t =
-    let* _ = left in
-    let* a = ws_around p in
+    let* _ = ws_after left in
+    let* a = ws_after p in
     let* _ = right in
     return a
 
@@ -261,12 +261,9 @@ and pi (): (range -> term) t =
         ((%a: A) #(%b B) %c #%d ... ) R
      *)
     let* _, args, arg =
-        one_or_more_rev (formal_argument ()) |> parens
+        one_or_more_rev (formal_argument ()) |> parens |> ws_after
     in
-    let* rty  =
-        term () |> ws_before
-    in
-    Elab.pi args arg rty |> return
+    map Elab.(pi args arg) (term ())
 
 
 
