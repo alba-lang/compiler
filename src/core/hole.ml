@@ -18,7 +18,7 @@ type info =
 type t = {
     reason: string;
     info: info;
-    args: (Gamma.term * bool) array;
+    args: (bool * int) array;
     res_tp: Gamma.term;
 }
 
@@ -51,6 +51,23 @@ let make_c_type (reason: string) (c_info: c_hole) gamma =
     }
 
 
+let push_arg (impl: bool) (a: int) (h: t): t =
+    {h with args =
+                Fmlib_std.Array.insert 0 (impl, a) h.args
+    }
+
+
+let count_args (h: t): int =
+    Array.length h.args
+
+
+
+let arg (i: int) (h: t): bool * int =
+    assert (i < count_args h);
+    h.args.(i)
+
+
+
 let is_unifiable (h: t): bool =
     match h.info with
     | Elab          -> false
@@ -74,22 +91,10 @@ let type_of (h: t): Gamma.term =
 
 let doc (h: t): Pretty.doc =
     let open Pretty in
-    let arg (t,impl) =
-        let inner =
-            Gamma.doc_of_term t
-            <+> char ':' <+> space
-            <+> Gamma.(doc_of_term (type_of_term t))
-        in
-        if impl then
-            space <+> char '{' <+> inner <+> char '}'
-        else
-            space <+> char '(' <+> inner <+> char ')'
-    in
     text
         (sprintf "%s for %s"
              (if is_unifiable h then "c-hole" else "e-hole")
              h.reason)
-    <+> cat (List.map arg (Array.to_list h.args))
     <+> char ':'
     <+> space
     <+> (Gamma.doc_of_term h.res_tp |> nest 2)

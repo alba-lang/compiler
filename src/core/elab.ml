@@ -86,6 +86,27 @@ let elab_term (ast: Ast.term) (g: gamma) (id: int): int t   (* task id *)
 
 
 
+let create_untyped_e_hole
+        (range: range)
+        (tag_term: string)
+        (tag_tp:   string)
+        (g: gamma)
+    : int t
+    =
+    let* htp =
+        create_hole
+            Hole.(make_c_type
+                      tag_tp
+                      (Infer_type ("this expression.", range))
+                      g
+                 )
+    in
+    let* tp = meta htp in
+    create_hole
+        Hole.(make_e_term tag_term tp)
+
+
+
 
 
 let prop (range: range): Ast.term =
@@ -98,6 +119,9 @@ let prop (range: range): Ast.term =
 
 
 
+
+
+
 let any (level: int) (range: range): Ast.term =
     range
     ,
@@ -105,6 +129,9 @@ let any (level: int) (range: range): Ast.term =
     let* _ = trace (fun _ -> Pretty.text (sprintf ">>> Make (Any %d) <<<" level))
     in
     fill_ehole range id (Gamma.any level g)
+
+
+
 
 
 
@@ -130,11 +157,16 @@ let name (n: Name.t) (range: range): Ast.term =
 
 
 
+
+
+
 let var (i: int) (range: range): Ast.term =
     assert (0 <= i);
     range
     ,
     fun g id ->
+        let* _ = trace_doc (Pretty.text (sprintf ">>> Make var %d <<<" i))
+    in
         if Gamma.length g <= i then
             Error.make
                 range
@@ -146,11 +178,16 @@ let var (i: int) (range: range): Ast.term =
 
 
 
+
+
+
 let annotated (t: Ast.term) (tp: Ast.term) (range: range): Ast.term =
     (* term: Type *)
     range
     ,
     fun g id ->
+        let* _ = trace_doc (Pretty.text ">>> Make annotated <<<")
+    in
         let* htp = create_hole
             Hole.(make_e_type "type of annotated" g)
         in
@@ -166,6 +203,39 @@ let annotated (t: Ast.term) (tp: Ast.term) (range: range): Ast.term =
         let* tp = wait_hole htp in
         let  t_an = Gamma.make_annotated t tp in
         fill_hole id t_an
+
+
+
+
+
+
+
+
+let application
+        (f: Ast.term)
+        (impl, a: bool * Ast.term)  (* implicit? *)
+        (range: range)
+    : Ast.term
+    =
+    range,
+    fun g h ->
+        let* _ = trace_doc (Pretty.text ">>> Make application <<<")
+        in
+        let* ha = create_untyped_e_hole
+            (Ast.range a)
+            "actual argument type"
+            "actual argument"
+            g
+        in
+        let* ()  = update_hole h Hole.(push_arg impl ha) in
+        let* _   = elab_term a g ha in
+        let* _   = elab_term f g h  in
+        return ()
+
+
+
+
+
 
 
 
@@ -292,9 +362,6 @@ let pi
 
 
 
-
-
-
 let make_term (t_ast: Ast.term) (state: State.t)
     : (Final.t, Error.t) result * State.t
     =
@@ -307,18 +374,11 @@ let make_term (t_ast: Ast.term) (state: State.t)
                     (fun _ ->
                          Pretty.(text ">>> Make top level term <<<"))
             in
-            let* id =
-                let* tp_id =
-                    create_hole
-                        Hole.(make_c_type
-                                  "top level term type"
-                                  (Infer_type
-                                       ("this expression.", Ast.range t_ast))
-                                  g)
-                in
-                let* tp = meta tp_id in
-                create_hole
-                    (Hole.make_e_term "top level term" tp)
+            let* id = create_untyped_e_hole
+                (Ast.range t_ast)
+                "top level term type"
+                "top level term"
+                g
             in
             let* _  = elab_term t_ast g id in
             let* t  = wait_hole id in

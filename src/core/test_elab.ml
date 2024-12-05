@@ -140,7 +140,14 @@ let success_term_tests
         " ( Any 0 ) "
         ;
         false, false,
-        "(pi (#(%A (Any 0))) %A)"
+        {|
+            (pi
+                (
+                    #(%A (Any 0))
+                )
+                %A
+            )
+        |}
         ;
         false, false,
         "(an Prop (Any 0))"
@@ -149,7 +156,13 @@ let success_term_tests
         "(ar (Any 1 ) Prop (Any 0))"
         ;
         false, false,
-        "(pi (#(%x (Any 1)) (%y (Any 0))) Prop)"
+        {|(pi
+            (
+                #(%x (Any 1))
+                (%y (Any 0))
+            )
+            Prop)
+        |}
         ;
     ]
 

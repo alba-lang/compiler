@@ -54,6 +54,7 @@ sig
     val trace_doc: doc -> unit t
     val value_opt: int -> term option t
     val get_hole:  int -> Hole.t t
+    val update_hole: int -> (Hole.t -> Hole.t) -> unit t
     val create_hole: Hole.t -> int t
     val fill_hole:   int -> term -> unit t
     val wait_hole:   int -> term t

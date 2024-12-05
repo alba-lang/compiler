@@ -294,6 +294,11 @@ struct
         return id
 
 
+    let update_hole (h: int) (f: Hole.t -> Hole.t): unit t =
+        let* hh = get_hole h in
+        put_hole h (f hh)
+
+
     let fill_hole (id: int) (t: term): unit t =
         let open Pretty in
         let* _ =
