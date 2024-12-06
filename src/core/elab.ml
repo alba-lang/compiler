@@ -47,14 +47,86 @@ module Unify = Unify.Make (Final)
 *)
 
 
-let fill_ehole (range: range) (id: int) (t: term): unit t =
-    let* tp_act =
-        Unify.into_hole
-            range
-            (Gamma.type_of_term t)
-            id
+let act_args (h: int) (t: term): int array t =
+    let* h  = get_hole h
     in
-    fill_hole id (Gamma.update_type t tp_act)
+    let rec args i ty arglst tasklst =
+        let* tyhn = head_normal ty in
+        match term_of_term tyhn |> snd with
+        | Meta i  when i < Hole.count_args h ->
+            let* ty = wait_hole i in
+            args i ty arglst tasklst
+
+        | Pi (_, _, _) ->
+            let nfi = assert false
+            and nai = assert false
+            in
+            if nfi > nai then
+                (* create nfi - nai holes and insert them to the accu.
+                 * make a new ty for the remaining formal arguments and call
+                 * args with the new ty.*)
+                assert false (* nyi *)
+            else
+                (* insert the next actual argument to the list, unify the actual
+                 * type with the required type and call args with the new ty.*)
+                assert false (* nyi *)
+
+        | _ ->
+            if i < Hole.count_args h then
+                (* merge range with the range of the last given actual argument
+                   and report the error "is not a function" *)
+                assert false (* nyi *)
+            else
+                let* () = wait_tasks tasklst  in
+                Array.of_list (List.rev arglst) |> return
+
+    in
+    args 0 (Gamma.type_of_term t) [] []
+
+
+
+let fill_e_hole (range: range) (id: int) (t: term): unit t=
+    let* args = act_args id t
+    in
+    let* args = ArrayM.map wait_hole args
+    in
+    let  fa =
+        if Array.length args = 0 then
+            t
+        else
+            Gamma.application t args
+    in
+    let fa_ty = type_of_term fa
+    in
+    let* _ = Unify.into_hole range fa_ty id in
+    let* fa_ty = zonk fa_ty in
+    fill_hole id (Gamma.update_type fa fa_ty)
+
+
+(* Note [Filling with Implicit Arguments
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    If
+        - The actual type starts with n implicit arguments
+        - The required type starts with m fewer implicit arguments
+    Then
+        - add m implicit actual arguments.
+
+   The required type can start with explicitly provided implicit arguments or
+   the required result type can start with some implicit arguments.
+
+   If there are no explicit actual arguments, then the result type has to be
+   inspected. We need the head normal form where the head of the base term in
+   the result is not a metavariable.
+
+   The hole has a signature [a0 a1 ...] r. We have to insert some implicit
+   arguments into the argument list. All arguments are a hole which can either
+   be filled by an elaborator (explicitly provided arguments) or by unification
+   (implicit arguments not explicitly provided).
+
+   We wait for all argument holes, construct the term [f a0 a1 ...], unify its
+   type with the required type r and then fill the hole with [f a0 a1 ...].
+*)
 
 
 
@@ -115,7 +187,7 @@ let prop (range: range): Ast.term =
     fun g id ->
     let* _ = trace (fun _ -> Pretty.text ">>> Make Prop <<<")
     in
-    fill_ehole range id (Gamma.prop g)
+    fill_e_hole range id (Gamma.prop g)
 
 
 
@@ -128,7 +200,7 @@ let any (level: int) (range: range): Ast.term =
     fun g id ->
     let* _ = trace (fun _ -> Pretty.text (sprintf ">>> Make (Any %d) <<<" level))
     in
-    fill_ehole range id (Gamma.any level g)
+    fill_e_hole range id (Gamma.any level g)
 
 
 
@@ -144,7 +216,7 @@ let name (n: Name.t) (range: range): Ast.term =
         in
         match Gamma.find_local n g with
         | Some i ->
-            fill_ehole
+            fill_e_hole
                 range
                 id
                 (Gamma.var i g)
@@ -174,7 +246,7 @@ let var (i: int) (range: range): Ast.term =
                 Pretty.(text "Not a valid De Bruijn index.")
             |> fail
         else
-            fill_ehole range id (Gamma.var i g)
+            fill_e_hole range id (Gamma.var i g)
 
 
 
@@ -277,7 +349,7 @@ let pi1
     in
     let* _    = elab_term rtp g hrtp in
     let make tp rtp =
-        fill_ehole range par_id (Gamma.make_pi1 b tp rtp)
+        fill_e_hole range par_id (Gamma.make_pi1 b tp rtp)
     in
     wait_one_of_holes
         (

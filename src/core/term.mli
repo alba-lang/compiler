@@ -21,6 +21,8 @@ val is_up_by: t -> int
 
 val up: int -> t -> t
 
+val count_implicits: int -> varbind array -> int
+
 
 val prop: t
 val any:  int -> t

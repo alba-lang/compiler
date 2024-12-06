@@ -16,7 +16,15 @@ val count_args: t -> int
 
 val arg: int -> t -> bool * int
 
+val args: t -> (bool * int) array
+
+val signature: t -> (bool * int) array * Gamma.term
+
+val count_implicits: int -> t -> int
+
 val is_unifiable: t -> bool
+
+val get_range: t -> Fmlib_parse.Position.range
 
 val c_hole_info: t -> c_hole
 

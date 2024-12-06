@@ -25,6 +25,9 @@ let up (i: int) ((j,t): t): t =
     i + j, t
 
 
+let count_implicits (_: int) (_: varbind array): int =
+    assert false
+
 
 let sort (s: Sort.t): t =
     0, Sort s

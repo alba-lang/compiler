@@ -49,6 +49,13 @@ sig
 
     type 'a hole_callback = int * (term -> 'a t)
 
+    module ArrayM:
+    sig
+        val map: ('a -> 'b t) -> 'a array -> 'b array t
+    end
+
+    val map: ('a -> 'b) -> 'a t -> 'b t
+
     val trace: (unit -> doc) -> unit t
     val fail: Error.t -> 'a t
     val trace_doc: doc -> unit t
@@ -61,10 +68,13 @@ sig
     val wait_one_of_holes: 'a hole_callback -> 'a hole_callback list -> 'a t
 
     val spawn: unit t -> int t
+    val wait_tasks: int list -> unit t
     val meta: int -> term t
 
     val zonk_avail: term -> term t
     val zonk: term -> term t
+
+    val head_normal: term -> term t
 
     val run: Final.t t -> State.t -> (Final.t, Error.t) result * State.t
 end

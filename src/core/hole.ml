@@ -68,10 +68,43 @@ let arg (i: int) (h: t): bool * int =
 
 
 
+let args (h: t): (bool * int) array =
+    h.args
+
+
+
+let signature (h: t): (bool * int) array * Gamma.term =
+    h.args, h.res_tp
+
+
+
+let count_implicits (start: int) (h: t): int =
+    let len = count_args h in
+    assert (start <= len);
+    let rec cnt n i =
+        if i = len then
+            n
+        else
+            let im, _ = h.args.(i) in
+            if im then
+                cnt (n + 1) (i + 1)
+            else
+                n
+    in
+    cnt 0 start
+
+
+
 let is_unifiable (h: t): bool =
     match h.info with
     | Elab          -> false
     | Constraint _  -> true
+
+
+
+let get_range (_: t): range =
+    (* Source location associated with the hole. *)
+    assert false
 
 
 

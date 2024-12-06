@@ -33,43 +33,6 @@ struct
 
 
 
-    let rec head_normal (t: term): term t =
-        match
-            term_of_term t |> snd
-        with
-        | Sort _ ->
-
-            return t
-
-        | Meta id ->
-
-            begin
-                let* v = value_opt id in
-                match v with
-                | None ->
-                    return t
-                | Some t ->
-                    head_normal t
-            end
-
-        | Var _ ->
-            return t
-
-        | App _ ->
-            assert false (* nyi *)
-
-        | Lam _ ->
-            assert false (* nyi *)
-
-        | Pi _  ->
-
-            return t
-
-        | Ann (_, _, _) ->
-
-            assert false
-
-
 
     let make_quad (act: term) (req: term): quad t =
         let* acthn = head_normal act in

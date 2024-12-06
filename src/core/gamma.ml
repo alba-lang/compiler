@@ -240,6 +240,13 @@ let push_variable
 
 
 
+
+let application (_: term) (_: term array): term =
+    assert false
+
+
+
+
 let make_annotated (t: term) (tp: term): term =
     let g  = gamma_of_term t
     and gt = gamma_of_term tp
