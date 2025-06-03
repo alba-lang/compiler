@@ -6,6 +6,6 @@ module Make (Final: ANY):
 sig
     open Base_elab.Make (Final)
 
-    val two: range -> term -> term -> term t
-    val into_hole: range -> term -> int -> term t
+    val two: range -> term -> term -> unit t
+    val into_hole: range -> term -> int -> unit t
 end

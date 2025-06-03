@@ -17,8 +17,6 @@ struct
     open Base_elab.Make (Final)
 
     type quad = {
-        hole: int;          (* The hole which has to filled with the unified
-                               term [act]. *)
         act: term;
         req: term;
         acthn: term;
@@ -37,13 +35,7 @@ struct
     let make_quad (act: term) (req: term): quad t =
         let* acthn = head_normal act in
         let* reqhn = head_normal req in
-        let* hole  =
-            create_hole
-                (Hole.make_e_term
-                     "unified actual"
-                     (type_of_term act))
-        in
-        { hole; act; req; acthn; reqhn }
+        { act; req; acthn; reqhn }
         |> return
 
 
@@ -118,7 +110,7 @@ struct
 
         | Sort s_act, Sort s_req when Sort.unify s_act s_req ->
 
-            fill_hole quad.hole quad.acthn
+            return ()
 
         | Meta id1, Meta id2 ->
 
@@ -146,7 +138,7 @@ struct
                 =
                 (term_of_term quad.reqhn |> fst)
             ->
-            fill_hole quad.hole quad.acthn
+            return ()
 
         | App _, App _ ->
 
@@ -208,17 +200,13 @@ struct
             let* data_next =
                      make_next_data_default data
             in
-            uni_wait_fill
-                data.quad.hole
-                data_next
+            uni_wait data_next
         else
             let* _ = wait_hole meta_id in
             let* data_next =
                      make_next_data_default data
             in
-            uni_wait_fill
-                data.quad.hole
-                data_next
+            uni_wait data_next
 
 
 
@@ -258,7 +246,7 @@ struct
     and flex_flex id1 id2 data: unit t =
         let cb _ =
             let* data_next = make_next_data_default data in
-            uni_wait_fill data.quad.hole data_next
+            uni_wait data_next
         in
         let cb1 = id1, cb
         and cb2 = id2, cb
@@ -266,31 +254,25 @@ struct
         wait_one_of_holes cb1 [cb2]
 
 
-    and uni_wait (data: data): term t =
-        (* Spawn a task to make the unification with [data] and wait for unified
-           actual term. *)
-        let* _ = spawn (uni data) in
-        wait_hole data.quad.hole
-
-
-
-    and uni_wait_fill (id: int) (data: data): unit t =
-        (* Spawn a task to make the unification with [data], wait for unified
-           actual term and fill the term into the hole [id]. *)
-        let* t = uni_wait data in
-        fill_hole id t
+    and uni_wait (data: data): unit t =
+        (* Spawn a task to make the unification with [data] and wait for the end
+           of the task. *)
+        (* MISSING: It has to be a task list which can be run in parallel. *)
+        let* id = spawn (uni data) in
+        wait_tasks [id]
 
 
 
 
-    let two (range: range) (act: term) (req: term): term t =
+
+    let two (range: range) (act: term) (req: term): unit t =
         (* Unify [act] with [req] and return the unified normal form of [act].
          *)
         let* data = make_data range act req in
         uni_wait data
 
 
-    let into_hole (range: range) (act: term) (id: int): term t =
+    let into_hole (range: range) (act: term) (id: int): unit t =
         let* h = get_hole id in
         two range act (Hole.type_of h)
 end

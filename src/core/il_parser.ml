@@ -98,7 +98,7 @@ let zero_or_more_rev (p: 'a t): (int * 'a list) t =
             scan (n + 1) (a :: lst)
         )
         </>
-        return (n, lst)
+return (n, lst)
     in
     scan 0 []
 let _ = zero_or_more_rev
@@ -242,7 +242,19 @@ and annotated (): (range -> term) t =
 
 
 and application (): (range -> term) t =
-    assert false (* nyi *)
+    let* f            = term () |> ws_after in
+    let* _, args, arg = one_or_more_rev (actual_argument ()) in
+    Elab.app f args arg |> return
+
+
+and actual_argument (): (bool * term) t =
+    (
+        let* _ = char '#' in
+        let* t = term () in
+        return (true, t)
+    )
+    </>
+    map (fun t -> false, t) (term ())
 
 
 

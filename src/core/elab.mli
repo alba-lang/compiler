@@ -73,7 +73,14 @@ val annotated: Ast.term -> Ast.term -> range -> Ast.term
 
 val arrow: Ast.term list -> int  -> Ast.term -> range ->  Ast.term
 
-val application: Ast.term -> bool * Ast.term -> range -> Ast.term
+
+val app:
+    Ast.term
+    -> (bool * Ast.term) list
+    -> bool * Ast.term
+    -> range
+    -> Ast.term
+
 
 val pi: formal_argument list -> formal_argument -> Ast.term -> range -> Ast.term
 

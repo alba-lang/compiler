@@ -25,6 +25,7 @@ val make_globals: unit -> globals
 val make_gamma:   globals -> gamma
 
 val doc_of_term: term -> Fmlib_pretty.Print.doc
+val string_of_term: term -> string
 
 
 

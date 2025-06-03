@@ -499,28 +499,12 @@ struct
 
 
 
-(*
-    let wait_one_of_holes (id: int) (id_lst: int list): (int * Value.t) t =
-        fun k s ->
-        match ST.find_value id_lst s with
-        | None ->
-            let started = ref false
-            in
-            List.iter
-                (fun id -> ST.put_active_wait_for_hole id started k s)
-                (id :: id_lst);
-            None
-        | Some pair ->
-            k pair s
-*)
-
-
-
     let spawn (task: unit t): int t =
         fun k s ->
         let id = ST.count_tasks s in
         ST.spawn (task (spawn_continuation id)) s;
         k id s
+
 
 
     let wait_tasks (id_list: int list): unit t =
@@ -538,7 +522,10 @@ struct
                      end
             )
             id_list;
-        assert false (* res option *)
+        if !n_waiting = 0 then
+            k () s
+        else
+            None
 
 
 

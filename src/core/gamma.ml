@@ -94,7 +94,6 @@ let make_sort (s: Term.t) (g: t): term =
 
 let string_of_term (t: term): string =
     Printer.Term.base_string true true (term_of_term t)
-let _ = string_of_term
 
 
 

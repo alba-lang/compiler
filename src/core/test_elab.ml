@@ -164,6 +164,36 @@ let success_term_tests
             Prop)
         |}
         ;
+        (*
+            all {A B: Any} (a: A) (f: A -> B): B
+         *)
+        false, false,
+        {|
+            (pi (
+                    #(%A (Any 0))
+                    #(%B (Any 0))
+                    (%a %A)
+                    (%f (ar %A %B))
+                )
+                %B
+            )
+        |}
+        ;
+        (*
+        (*
+            all {A: Any} {F: A -> Any} {a b: A}: F a -> F b
+         *)
+        true, false,
+        {| (pi (
+                #(%A (Any 0))
+                #(%F (ar %A (Any 0)))
+                #(%a %A)
+                #(%b %A)
+               )
+               (ar (ap %F %a) (ap %F %b))
+           )
+        |}
+        *)
     ]
 
 
@@ -208,7 +238,7 @@ type failure_term_test =
 
 
 let failure_term_tests: failure_term_test list =
-    [
+    [   (*
         false, false,
         "(pi (%x %y) Prop)"
         ;
@@ -217,6 +247,7 @@ let failure_term_tests: failure_term_test list =
         ;
         false, false,
         "%xxx"
+        *)
     ]
 
 

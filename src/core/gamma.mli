@@ -22,6 +22,8 @@ val update_term: term -> Term.t -> term
 
 val doc_of_term: term -> Fmlib_pretty.Print.doc
 
+val string_of_term: term -> string
+
 
 
 

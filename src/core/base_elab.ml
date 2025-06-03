@@ -51,6 +51,9 @@ let doc_of_term (t: term): Pretty.doc =
     Gamma.(doc_of_term t)
 
 
+let string_of_term (t: term): string =
+    Gamma.(string_of_term t)
+
 
 
 module State =

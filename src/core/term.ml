@@ -25,8 +25,20 @@ let up (i: int) ((j,t): t): t =
     i + j, t
 
 
-let count_implicits (_: int) (_: varbind array): int =
-    assert false
+let count_implicits (start: int) (args: varbind array): int =
+    let len = Array.length args
+    in
+    let rec count i n =
+        if i = len then
+            n
+        else
+            let b, _, _ = args.(i) in
+            if Info.Bind.is_implicit b then
+                count (i + 1) (n + 1)
+            else
+                n
+    in
+    count start 0
 
 
 let sort (s: Sort.t): t =

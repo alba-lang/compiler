@@ -48,27 +48,37 @@ module Unify = Unify.Make (Final)
 
 
 let act_args (h: int) (t: term): int array t =
+    (* - Collect the actual arguments of the term [t].
+       - Add implicits where necessary.
+       - Check that the actual types of the arguments conform to the
+         required types of the formal arguments.
+    *)
     let* h  = get_hole h
     in
     let rec args i ty arglst tasklst =
         let* tyhn = head_normal ty in
         match term_of_term tyhn |> snd with
-        | Meta i  when i < Hole.count_args h ->
-            let* ty = wait_hole i in
+        | Meta hid  when i < Hole.count_args h ->
+            let* ty = wait_hole hid in
             args i ty arglst tasklst
 
-        | Pi (_, _, _) ->
-            let nfi = assert false
-            and nai = assert false
+        | Pi (start, fargs, _) ->
+            let nfi = Term.count_implicits start fargs
+            and nai = Hole.count_implicits i h
             in
             if nfi > nai then
                 (* create nfi - nai holes and insert them to the accu.
                  * make a new ty for the remaining formal arguments and call
                  * args with the new ty.*)
                 assert false (* nyi *)
-            else
+            else if nfi = nai then
                 (* insert the next actual argument to the list, unify the actual
                  * type with the required type and call args with the new ty.*)
+                assert false (* nyi *)
+            else
+                (* nfi < nai: there are actual implicit arguments, but there are
+                   no corresponding formal implicit arguments. Report an error.
+                 *)
                 assert false (* nyi *)
 
         | _ ->
@@ -283,7 +293,7 @@ let annotated (t: Ast.term) (tp: Ast.term) (range: range): Ast.term =
 
 
 
-let application
+let app1
         (f: Ast.term)
         (impl, a: bool * Ast.term)  (* implicit? *)
         (range: range)
@@ -305,6 +315,28 @@ let application
         return ()
 
 
+
+let app
+        (f: Ast.term)
+        (args: (bool * Ast.term) list)
+        (arg: (bool * Ast.term))
+        (_: range)
+    : Ast.term
+    =
+    let rec aux = function
+        | [] ->
+            assert false (* cannot happen *)
+
+        | [_, a as arg] ->
+            let r = Position.merge (Ast.range f) (Ast.range a) in
+            app1 f arg r
+
+        | (_, a as arg) :: prefix ->
+            let f = aux prefix in
+            let r = Position.merge (Ast.range f) (Ast.range a) in
+            app1 f arg r
+    in
+    aux (arg :: args)
 
 
 
