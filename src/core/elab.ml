@@ -113,7 +113,7 @@ let fill_e_hole (range: range) (id: int) (t: term): unit t=
     fill_hole id (Gamma.update_type fa fa_ty)
 
 
-(* Note [Filling with Implicit Arguments
+(* Note [Filling with Implicit Arguments]
    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     If

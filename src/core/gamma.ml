@@ -1,3 +1,28 @@
+(* Note [Terms]
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   A [term] is a welltyped term. It contains the context, the raw term and its
+   type i.e. a term has the structure
+
+        Gamma |- t : T
+
+   where [t] is a raw term and [T] is a welltyped term.
+
+   In order to construct welltyped terms inductively we use the fact that sorts
+   are always welltyped i.e. for sorts
+
+        Gamma |- s
+
+   is sufficient. The type of a sort can be computed trivially (except for [Top]
+   which does not have a type) and therefore need not be stored.
+
+   Therefore the type [term] has one constructor [Free] for sorts and another
+   [Typed] for all the other terms.
+
+*)
+
+
+
 open Fmlib_std
 open Std
 
@@ -21,8 +46,12 @@ and entry = {
 }
 
 and term =
-    | Free of  t * Sort.t
-    | Typed of t * Term.t * term (* Gamma |- t : T *)
+    (* See Note [Terms] *)
+    | Free of
+          t * Sort.t            (* Gamma |- s *)
+
+    | Typed of
+          t * Term.t * term     (* Gamma |- t : T *)
 
 
 
