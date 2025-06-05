@@ -1,3 +1,58 @@
+(*  Note [Insertion of Implicit Arguments]
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    Suppose we have elaborated a term [t] with its type
+
+        t : all {x: A} {y: B}: R
+
+    and want to fill it into a hole.
+
+
+    Is it necessary to create metavariables [X] and [Y] and fill
+
+        t {X} {Y}: R[X,Y / x,y]
+
+    into the hole?
+
+
+    Let
+
+        nit: maximum number of implicit actual arguments which can be inserted
+
+        nir: maximum number of implicit arguments the required type needs
+
+    Then the answer is
+
+        nit - nir              or 0 if [nit < nir]
+
+
+
+    Computation of [nit]:
+    ------------------------------------------------------------
+
+    Compute head normal form of the type of the term [t]
+
+    [nit] is the number of implicit arguments before the first explicit
+    argument of before the result type. If the result type has a
+    metavariable at its head, we wait for the metavariable. If the
+    metavariable is not instantiated we assume that the final result type
+    has no implicit arguments.
+
+
+    Computation of [niw]:
+    ------------------------------------------------------------
+
+    [nir] is the number of actual implicit arguments available in the source
+    before the first explicit actual argument.
+
+    If there is no explicit actual argument we add to [niw] the number of
+    implicit arguments in the head normal form of the required type computed as
+    above in the computation of [nit].
+*)
+
+
+
+
 open Printf
 open Std
 
