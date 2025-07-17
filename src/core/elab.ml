@@ -168,30 +168,8 @@ let fill_e_hole (range: range) (id: int) (t: term): unit t=
     fill_hole id (Gamma.update_type fa fa_ty)
 
 
-(* Note [Filling with Implicit Arguments]
-   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    If
-        - The actual type starts with n implicit arguments
-        - The required type starts with m fewer implicit arguments
-    Then
-        - add m implicit actual arguments.
 
-   The required type can start with explicitly provided implicit arguments or
-   the required result type can start with some implicit arguments.
-
-   If there are no explicit actual arguments, then the result type has to be
-   inspected. We need the head normal form where the head of the base term in
-   the result is not a metavariable.
-
-   The hole has a signature [a0 a1 ...] r. We have to insert some implicit
-   arguments into the argument list. All arguments are a hole which can either
-   be filled by an elaborator (explicitly provided arguments) or by unification
-   (implicit arguments not explicitly provided).
-
-   We wait for all argument holes, construct the term [f a0 a1 ...], unify its
-   type with the required type r and then fill the hole with [f a0 a1 ...].
-*)
 
 
 
@@ -232,15 +210,27 @@ let create_untyped_e_hole
     =
     let* htp =
         create_hole
-            Hole.(make_c_type
-                      tag_tp
-                      (Infer_type ("this expression.", range))
-                      g
+            Hole.(make_c_expression_type
+                     range
+                     tag_tp
+                     g
                  )
     in
     let* tp = meta htp in
     create_hole
-        Hole.(make_e_term tag_term tp)
+        Hole.(make_e_term range tag_term tp)
+
+
+(*
+let create_function_term_hole
+        (is_implicit: bool)
+        (h_argument: int)
+        (h_application: int)
+    : int t
+    =
+    let* hole = get_hole h_application in
+    create_hole (Hole.push_arg is_implicit h_argument hole)
+*)
 
 
 
@@ -326,12 +316,12 @@ let annotated (t: Ast.term) (tp: Ast.term) (range: range): Ast.term =
         let* _ = trace_doc (Pretty.text ">>> Make annotated <<<")
     in
         let* htp = create_hole
-            Hole.(make_e_type "type of annotated" g)
+            Hole.(make_e_type (Ast.range tp) "type of annotated" g)
         in
         let* mtp = meta htp
         in
         let* ht = create_hole
-            Hole.(make_e_term "term of annotated" mtp)
+            Hole.(make_e_term (Ast.range t)"term of annotated" mtp)
         in
         let* _ = elab_term t  g ht  in
         let* _ = elab_term tp g htp in
@@ -358,11 +348,12 @@ let app1
     fun g h ->
         let* _ = trace_doc (Pretty.text ">>> Make application <<<")
         in
-        let* ha = create_untyped_e_hole
-            (Ast.range a)
-            "actual argument type"
-            "actual argument"
-            g
+        let* ha = (* hole for the argument *)
+            create_untyped_e_hole
+                (Ast.range a)
+                "actual argument type"
+                "actual argument"
+                g
         in
         let* ()  = update_hole h Hole.(push_arg impl ha) in
         let* _   = elab_term a g ha in
@@ -378,9 +369,16 @@ let app
         (_: range)
     : Ast.term
     =
+    (*  Elaborate an application
+
+        f     a1   a2   ...   an
+            | args reversed | arg |
+
+        i.e. arg :: args contains all arguments in reversed order.
+    *)
     let rec aux = function
         | [] ->
-            assert false (* cannot happen *)
+            assert false (* cannot happen, at least one argument *)
 
         | [_, a as arg] ->
             let r = Position.merge (Ast.range f) (Ast.range a) in
@@ -415,15 +413,15 @@ let pi1
         match ty with
         | None ->
             create_hole
-                Hole.(make_c_type
+                Hole.(make_c_variable_type
+                          nrange
                           "pi unknown argument type"
-                          (Infer_type ("the variable.", nrange))
                           g0)
 
         | Some ty ->
             let* hty =
                 create_hole
-                    (Hole.make_e_type "pi argument type" g0)
+                    (Hole.make_e_type (Ast.range ty) "pi argument type" g0)
             in
             let* _   = elab_term ty g0 hty in
             return hty
@@ -432,7 +430,7 @@ let pi1
     let  g    = Gamma.push_variable b true tp g0 in
     let* hrtp =
         create_hole
-            (Hole.make_e_type "pi result type" g)
+            (Hole.make_e_type (Ast.range rtp) "pi result type" g)
     in
     let* _    = elab_term rtp g hrtp in
     let make tp rtp =

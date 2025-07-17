@@ -1,54 +1,70 @@
+open Std
 open Printf
 
 type range = Fmlib_parse.Position.range
 
 
-module Pretty = Fmlib_pretty.Print
+
+module Pretty =
+struct
+    include Fmlib_pretty.Print
+    include Pretty_plus
+end
 
 
-type c_hole =
-    | Infer_type of string * range
 
-
-type info =
+type kind =
     | Elab
-    | Constraint of c_hole
+    | Infer_type of string
 
 
 type t = {
-    reason: string;
-    info: info;
+    range: range;
+    reason: string; (* used as information for the tracer *)
+    kind: kind;
     args: (bool * int) array;
     res_tp: Gamma.term;
 }
 
-let make_e_type (reason: string) (gamma: Gamma.t): t =
+let make_e_type (range: range) (reason: string) (gamma: Gamma.t): t =
     (* Create a type hole for an elaborated type (i.e. present in the source
        code). *)
     {
+        range;
         reason;
-        info = Elab;
+        kind = Elab;
         args = [||];
         res_tp = Gamma.top 0 gamma;
     }
 
 
-let make_e_term (reason: string) (res_tp: Gamma.term): t =
+let make_e_term (range: range) (reason: string) (res_tp: Gamma.term): t =
     {
+        range;
         reason;
-        info = Elab;
+        kind = Elab;
         args = [||];
         res_tp
     }
 
 
-let make_c_type (reason: string) (c_info: c_hole) gamma =
-    {
-        reason;
-        info = Constraint c_info;
-        args = [||];
-        res_tp = Gamma.top 0 gamma;
+let make_c_variable_type range reason gamma =
+    { range;
+      reason;
+      kind = Infer_type "variable.";
+      args = [||];
+      res_tp = Gamma.top 0 gamma;
     }
+
+
+let make_c_expression_type range reason gamma =
+    { range;
+      reason;
+      kind = Infer_type "expression.";
+      args = [||];
+      res_tp = Gamma.top 0 gamma;
+    }
+
 
 
 let push_arg (impl: bool) (a: int) (h: t): t =
@@ -96,9 +112,9 @@ let count_implicits (start: int) (h: t): int =
 
 
 let is_unifiable (h: t): bool =
-    match h.info with
+    match h.kind with
     | Elab          -> false
-    | Constraint _  -> true
+    | _             -> true
 
 
 
@@ -108,21 +124,13 @@ let get_range (_: t): range =
 
 
 
-let c_hole_info (h: t): c_hole =
-    match h.info with
-    | Elab ->
-        assert false (* Illegal call *)
-
-    | Constraint c_hole ->
-        c_hole
-
 
 let type_of (h: t): Gamma.term =
     h.res_tp
 
 
 
-let doc (h: t): Pretty.doc =
+let trace_doc (h: t): Pretty.doc =
     let open Pretty in
     text
         (sprintf "%s for %s"
@@ -132,3 +140,26 @@ let doc (h: t): Pretty.doc =
     <+> space
     <+> (Gamma.doc_of_term h.res_tp |> nest 2)
     |> group
+
+
+
+
+let error (id: int) (h: t): Error.t =
+    let open Pretty
+    in
+    match h.kind with
+    | Infer_type str ->
+        Error.make
+            h.range
+            "cannot infer type"
+            (
+                wrap_words "I cannot infer the type of the"
+                <+> group space
+                <+> text str
+                <+> group space
+                <+> text (sprintf "(Hole ?%d)" id)
+                <+> cut
+            )
+
+    | Elab ->
+        assert false (* Illegal call *)

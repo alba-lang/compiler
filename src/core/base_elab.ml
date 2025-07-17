@@ -217,19 +217,7 @@ struct
                 (sprintf "No hole of %d found" n |> text)
 
         | Some (id, h) ->
-            match Hole.c_hole_info h with
-            | Infer_type (s, range) ->
-                Error.make
-                    range
-                    "cannot infer type"
-                    (
-                        wrap_words "I cannot infer the type of"
-                        <+> group space
-                        <+> text s
-                        <+> group space
-                        <+> text (sprintf "(Hole ?%d)" id)
-                        <+> cut
-                    )
+            Hole.error id h
 end
 
 
@@ -291,7 +279,7 @@ struct
             (fun () ->
                 description
                     (sprintf "Create ?%d" id |> text)
-                    (Hole.doc h)
+                    (Hole.trace_doc h)
             )
         in
         return id

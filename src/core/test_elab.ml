@@ -238,7 +238,7 @@ type failure_term_test =
 
 
 let failure_term_tests: failure_term_test list =
-    [   (*
+    [
         false, false,
         "(pi (%x %y) Prop)"
         ;
@@ -247,7 +247,6 @@ let failure_term_tests: failure_term_test list =
         ;
         false, false,
         "%xxx"
-        *)
     ]
 
 
