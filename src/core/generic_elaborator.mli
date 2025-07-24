@@ -40,7 +40,7 @@ sig
        The elaborator finally elaborates an object of type [Final.t]. The root
        task has type [Final.t t]. The root task is run by
 
-        {[run task error_handler]}
+        {[run error_handler task]}
 
        where [task: Final.t t].
 

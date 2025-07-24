@@ -72,6 +72,7 @@ struct
 
     and hole_waiting_task = {        (* See Note [Waiting Tasks] *)
         started: bool ref;
+        wtask_id: int;
         task: Value.t -> task;
     }
 
@@ -209,7 +210,7 @@ struct
                 }
         in
         q.hole_waiting <-
-            {started; task}
+            {started; wtask_id = task_id; task}
             ::
             q.hole_waiting
 
@@ -806,11 +807,13 @@ let%test _ =
     Note [Waiting Tasks]
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    A waiting task consists of two components:
+    A waiting task consists of 3 components:
 
         started: bool ref
 
-        task: (int * Value.t) -> task
+        wtask_id: int           (* Id of the waiting task *)
+
+        task: Value.t -> task
 
    A waiting task waits for some hole to be filled. If the hole is filled, the
    function 'task' can be used to generate a task by applying it to the id of
