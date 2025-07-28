@@ -15,6 +15,9 @@ val is_arrow:    t -> bool
 
 val string: t -> string
 
+val parens_string: t -> string
+(** In case of an operator the name in parens. *)
+
 val precedence: t -> Precedence.t
 
 val compare: t -> t -> int

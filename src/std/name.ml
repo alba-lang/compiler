@@ -34,6 +34,14 @@ let string ((_, s): t): string =
     s
 
 
+let parens_string (i, s: t): string =
+    match i with
+    | Operator _ ->
+        Printf.sprintf "(%s)" s
+    | _ ->
+        s
+
+
 let precedence ((info, _): t): Precedence.t =
     match info with
     | Operator p ->
